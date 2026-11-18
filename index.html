@@ -2503,7 +2503,7 @@ async function distoTrigger(){
     // parancs: szöveg (pl. g), vagy hex:… bájtsor (pl. hex:67 0d 0a)
     const cmd=S.b.distoCmd||'g';
     const data=/^hex:/i.test(cmd)?new Uint8Array(cmd.slice(4).trim().split(/[\s,]+/).filter(Boolean).map(h=>parseInt(h,16))):new TextEncoder().encode(cmd);
-    dlog('Indító parancs ('+distoCmdChar.uuid.slice(4,8)+'): '+cmd);
+    dlog('Indító parancs ('+String(distoCmdChar.uuid).toLowerCase().slice(4,8)+'): '+cmd);
     const p=distoCmdChar.properties;
     if(p.write&&distoCmdChar.writeValueWithResponse)await distoCmdChar.writeValueWithResponse(data);
     else if(p.writeWithoutResponse&&distoCmdChar.writeValueWithoutResponse)await distoCmdChar.writeValueWithoutResponse(data);
@@ -2544,9 +2544,9 @@ $('#btnDisto').onclick=async()=>{
     const srv=await dev.gatt.connect();dlog('GATT csatlakozva');
     const svc=await srv.getPrimaryService(DISTO_SVC);
     const cs=await svc.getCharacteristics();distoAllChars=cs;
-    const sid=c=>c.uuid.slice(4,8);
+    const lu=c=>String(c.uuid).toLowerCase(),sid=c=>lu(c).slice(4,8); // a Bluefy nagybetűs azonosítót ad
     dlog('Csatornák: '+cs.map(c=>sid(c)+'['+(c.properties.read?'R':'')+(c.properties.notify?'N':'')+(c.properties.indicate?'I':'')+(c.properties.write?'W':'')+(c.properties.writeWithoutResponse?'w':'')+']').join(' '));
-    let distC=null;for(const id of DISTO_DIST_IDS){distC=cs.find(c=>c.uuid.startsWith(id));if(distC)break;}
+    let distC=null;for(const id of DISTO_DIST_IDS){distC=cs.find(c=>lu(c).startsWith(id));if(distC)break;}
     dlog(distC?'Mérés-csatorna: '+sid(distC):'Nincs ismert mérés-csatorna – minden csatornát naplózok');
     // minden értesítő csatornára feliratkozunk (az újabb DISTO-k csak így küldik a mérést), és mindet naplózzuk
     for(const c of cs){
@@ -2562,7 +2562,7 @@ $('#btnDisto').onclick=async()=>{
     }
     distoChar=distC||cs[0]||null;
     distoCmdChar=null;
-    for(const id of DISTO_CMD_IDS){const c=cs.find(x=>x.uuid.startsWith(id)&&(x.properties.write||x.properties.writeWithoutResponse));if(c){distoCmdChar=c;break;}}
+    for(const id of DISTO_CMD_IDS){const c=cs.find(x=>lu(x).startsWith(id)&&(x.properties.write||x.properties.writeWithoutResponse));if(c){distoCmdChar=c;break;}}
     dlog(distoCmdChar?'Parancs-csatorna: '+sid(distoCmdChar):'Nincs parancs-csatorna');
     dev.addEventListener('gattserverdisconnected',()=>{dlog('Kapcsolat megszakadt');distoChar=null;distoCmdChar=null;$('#btnDisto').classList.remove('active');if(measureMode)updMeasOv();});
     $('#btnDisto').classList.add('active');
