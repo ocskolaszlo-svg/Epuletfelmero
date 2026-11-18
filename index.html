@@ -88,6 +88,11 @@ tr.selrow{background:#1e3a8a55}
 /* Modal & Ghost */
 #modalWrap{display:none;position:fixed;inset:0;background:#0008;z-index:200;align-items:center;justify-content:center}
 #modalWrap.open{display:flex}
+#numPad{display:none;position:fixed;right:12px;bottom:12px;z-index:280;background:#111827f2;border:1px solid #3b82f6;border-radius:12px;padding:8px;grid-template-columns:repeat(4,58px);gap:6px;box-shadow:0 10px 30px #000a}
+#numPad.on{display:grid}
+#numPad button{height:50px;font-size:20px;background:#374151;color:#fff;border:1px solid #4b5563;border-radius:8px;touch-action:manipulation}
+#numPad button:active{background:#4b5563}
+#numPad .pk-ok{grid-column:span 4;background:#2563eb;border-color:#3b82f6;font-size:17px}
 #measOv{display:none;position:fixed;inset:0;background:rgba(220,38,38,.30);z-index:300;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:12px;touch-action:none;user-select:none}
 #measOv.on{display:flex}
 #measOv .mo-box{background:#111827ee;border:1px solid #f87171;border-radius:12px;padding:10px 14px;min-width:300px;text-align:center;color:#fff}
@@ -268,7 +273,7 @@ textarea{resize:vertical}
       </div>
       <div id="segBox" style="display:none">
         <span id="segTxt">Szakasz</span>
-        <input id="segLen" data-disto type="number" step="0.01" inputmode="decimal" placeholder="hossz" title="Valós hossz (m) – DISTO-val is">
+        <input id="segLen" data-disto type="text" inputmode="none" autocomplete="off" placeholder="hossz" title="Valós hossz (m) – DISTO-val is">
         <button class="btn" id="segApply" title="Az utolsó megrajzolt szakasz hossza legyen ennyi">✓ utolsó szakasz</button>
         <span class="muted">vagy új szakasz:</span>
         <button class="btn" data-dir="0" title="jobbra">→</button><button class="btn" data-dir="90" title="lefelé">↓</button><button class="btn" data-dir="180" title="balra">←</button><button class="btn" data-dir="270" title="felfelé">↑</button>
@@ -1077,12 +1082,12 @@ function openSectionModal(){
   const l=curLvl();
   const sec=l.section?{...l.section}:{axis:'x',W:'',hL:'',sL:'',c:'',sR:'',hR:'',H:'',sym:false};
   const m=$('#modal');m.classList.add('wide');
-  const f=(k,lab,tip)=>`<div class="row"><label title="${tip||''}">${lab}</label><input id="sc_${k}" data-disto type="number" step="0.01" inputmode="decimal" value="${sec[k]??''}" placeholder="—"></div>`;
+  const f=(k,lab,tip)=>`<div class="row"><label title="${tip||''}">${lab}</label><input id="sc_${k}" data-disto type="text" inputmode="none" autocomplete="off" value="${sec[k]??''}" placeholder="—"></div>`;
   m.innerHTML=`<h3><span>Padlástér metszet – ${esc(l.name)}</span><button class="btn" id="mClose">✕</button></h3>
     <div style="display:flex;gap:14px;flex-wrap:wrap">
     <div style="min-width:280px;flex:1">
       <div class="row"><label>Metszet iránya</label><select id="sc_axis"><option value="x" ${sec.axis==='x'?'selected':''}>vízszintes ↔ (rajzon balról jobbra)</option><option value="y" ${sec.axis==='y'?'selected':''}>függőleges ↕ (fentről lefelé)</option></select></div>
-      <div class="row"><label>Teljes szélesség (m)</label><input id="sc_W" data-disto type="number" step="0.01" inputmode="decimal" value="${sec.W??''}" placeholder="—"><button class="btn" id="scFromPlan" title="A rajz belső szélességéből (köztes falakkal együtt)">rajzból</button></div>
+      <div class="row"><label>Teljes szélesség (m)</label><input id="sc_W" data-disto type="text" inputmode="none" autocomplete="off" value="${sec.W??''}" placeholder="—"><button class="btn" id="scFromPlan" title="A rajz belső szélességéből (köztes falakkal együtt)">rajzból</button></div>
       ${f('hL','Bal oldalfal (m)','térdfal magassága')}
       ${f('sL','Bal tető (m)','ferde hossz a térdfal tetejétől a padlásfödémig')}
       ${f('c','Padlásfödém (m)','vízszintes (kakasülő) szakasz szélessége; üresen hagyva számolja')}
@@ -1148,6 +1153,58 @@ function updSegBox(){
   if(document.activeElement!==inp&&n>=1){const a=draft[n-1],b=draft[n];inp.value=r2(Math.hypot(b.x-a.x,b.y-a.y));}
   $('#segApply').disabled=n<1;
 }
+
+/* Nyílászáró altípusok: alaplista + a felmérésben már használtak; legutóbbi 3 gyorsgombként */
+const ALT_BASE={
+  'Ablak':['Műanyag 2r.','Műanyag 3r.','Fa 2r.','Fa 3r.','Fa kapcsolt gerébtokos','Fa egyesített szárnyú','Alumínium','Acél','Tetőablak'],
+  'Ajtó':['Beltéri fa','Beltéri üveges','Bejárati fa','Bejárati műanyag','Bejárati fém','Garázskapu','Pinceajtó'],
+  'Erkélyajtó':['Műanyag 2r.','Műanyag 3r.','Fa 2r.','Fa 3r.','Fa kapcsolt gerébtokos','Alumínium']
+};
+function altOpts(type){
+  const a=(ALT_BASE[type]||ALT_BASE.Ablak).slice();
+  S.openings.forEach(o=>{if(o.type===type&&o.alt&&!a.includes(o.alt))a.push(o.alt);});
+  return a;
+}
+function recentAlts(type){
+  const out=[];
+  for(let i=S.openings.length-1;i>=0&&out.length<3;i--){const o=S.openings[i];if(o.type===type&&o.alt&&!out.includes(o.alt))out.push(o.alt);}
+  return out;
+}
+
+/* Saját számbillentyűzet a méretmezőkhöz (data-disto): az iPad billentyűzete nem ugrik fel */
+let padEl=null,padFresh=true,padTimer=null;
+function padTarget(){const a=document.activeElement;return a&&a.matches&&a.matches('input[data-disto]')?a:null;}
+function buildPad(){
+  padEl=document.createElement('div');padEl.id='numPad';
+  const keys=['7','8','9','⌫','4','5','6','C','1','2','3','±',',','0','00','OK'];
+  padEl.innerHTML=keys.map(k=>`<button data-k="${k}" class="${k==='OK'?'pk-ok':''}">${k==='OK'?'Tovább ↵':k}</button>`).join('');
+  document.body.appendChild(padEl);
+  padEl.addEventListener('pointerdown',e=>{e.preventDefault();}); // a mező fókuszban marad
+  padEl.querySelectorAll('button').forEach(b=>b.addEventListener('pointerup',e=>{e.preventDefault();padKey(b.dataset.k);}));
+}
+function padKey(k){
+  const el=padTarget();if(!el)return;
+  let v=padFresh?'':String(el.value);
+  if(k==='OK'){
+    const list=distoFields(el),i=list.indexOf(el),nextId=list[i+1]?list[i+1].id:null;
+    el.dispatchEvent(new Event('change',{bubbles:true}));
+    el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+    if(el.id==='segLen'){el.blur();hidePad();return;}
+    if(document.activeElement===el||!document.contains(el)){const n=nextId&&document.getElementById(nextId);if(n){n.focus();}else{el.blur&&el.blur();hidePad();}}
+    return;
+  }
+  if(k==='⌫')v=String(el.value).slice(0,-1);
+  else if(k==='C')v='';
+  else if(k==='±')v=String(el.value).startsWith('-')?String(el.value).slice(1):'-'+el.value;
+  else if(k===','){if(!v.includes('.'))v=(v||'0')+'.';}
+  else v+=k;
+  padFresh=false;
+  el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function showPad(){if(!padEl)buildPad();padEl.classList.add('on');}
+function hidePad(){if(padEl)padEl.classList.remove('on');}
+document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-disto]')){clearTimeout(padTimer);padFresh=true;showPad();}});
+document.addEventListener('focusout',e=>{if(e.target.matches&&e.target.matches('input[data-disto]'))padTimer=setTimeout(()=>{if(!padTarget())hidePad();},150);});
 
 /* Snap & CAD */
 function clientToWorld(cx,cy){
@@ -1270,8 +1327,8 @@ function openRectModal(r,isNew){
   const m=$('#modal');
   m.innerHTML=`<h3><span>${isNew?'Új helyiség – belméretek':'Helyiség belméretei'}</span><button class="btn" id="mClose">✕</button></h3>
     <div class="row"><label>Név</label><input id="rmName" list="dl_rname" value="${esc(r.name)}"><datalist id="dl_rname">${ROOM_NAMES.map(n=>`<option value="${n}">`).join('')}</datalist></div>
-    <div class="row"><label>Vízszintes ↔ (m)</label><input id="rmW" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.x2-b.x1)}"></div>
-    <div class="row"><label>Függőleges ↕ (m)</label><input id="rmH" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.y2-b.y1)}"></div>
+    <div class="row"><label>Vízszintes ↔ (m)</label><input id="rmW" data-disto type="text" inputmode="none" autocomplete="off" value="${r2(b.x2-b.x1)}"></div>
+    <div class="row"><label>Függőleges ↕ (m)</label><input id="rmH" data-disto type="text" inputmode="none" autocomplete="off" value="${r2(b.y2-b.y1)}"></div>
     <p class="muted">${distoChar?'DISTO csatlakoztatva: a mérés az aktív mezőbe kerül, majd a következőre lép.':'Tipp: DISTO gombbal Bluetooth-on is jöhet a mérés.'}</p>
     <div class="row" style="justify-content:flex-end;margin-top:10px">
       <button class="btn" id="mMeas">🔴 Mérés</button>
@@ -1951,11 +2008,13 @@ function openOpModal(o){
   const m=$('#modal');
   m.innerHTML=`<h3><span>${esc(o.type)} méretezése</span><button class="btn" id="mClose">✕</button></h3>
     <div class="row"><label>Gyakori méret</label><select id="mFreq"><option value="">— válassz —</option>${S.freqOps.map((f,i)=>`<option value="${i}">${esc(f.type)}: ${f.ow}${f.sh?'+'+f.sh:''}/${f.oh} (pm ${f.pm})</option>`).join('')}</select></div>
-    <div class="row"><label>Altípus</label><input id="mAlt" value="${esc(o.alt)}"></div>
-    <div class="row"><label>Szélesség (m)</label><input id="mW" type="number" step="0.05" value="${o.ow}"></div>
-    <div class="row"><label>Magasság (m)</label><input id="mH" type="number" step="0.05" value="${o.oh}"></div>
-    <div class="row"><label>Redőnytok (m)</label><input id="mSh" type="number" step="0.05" value="${o.sh||0}"></div>
-    <div class="row"><label>Parapet pm (m)</label><input id="mPm" type="number" step="0.05" value="${o.pm||0}"></div>
+    <div class="row"><label>Altípus</label><select id="mAltSel" style="flex:1"><option value="">— válassz —</option>${altOpts(o.type).map(a=>`<option ${a===o.alt?'selected':''}>${esc(a)}</option>`).join('')}<option value="__x">Egyéb (beírom)…</option></select></div>
+    <div class="row"><label></label><input id="mAlt" value="${esc(o.alt)}" placeholder="altípus"></div>
+    ${recentAlts(o.type).length?`<div class="row"><label>Legutóbbi</label><span style="display:flex;gap:4px;flex-wrap:wrap">${recentAlts(o.type).map(a=>`<button class="btn" data-alt="${esc(a)}">${esc(a)}</button>`).join('')}</span></div>`:''}
+    <div class="row"><label>Szélesség (m)</label><input id="mW" data-disto type="text" inputmode="none" autocomplete="off" value="${o.ow}"></div>
+    <div class="row"><label>Magasság (m)</label><input id="mH" data-disto type="text" inputmode="none" autocomplete="off" value="${o.oh}"></div>
+    <div class="row"><label>Redőnytok (m)</label><input id="mSh" data-disto type="text" inputmode="none" autocomplete="off" value="${o.sh||0}"></div>
+    <div class="row"><label>Parapet pm (m)</label><input id="mPm" data-disto type="text" inputmode="none" autocomplete="off" value="${o.pm||0}"></div>
     <div class="row"><label>Darabszám (db)</label><input id="mCnt" type="number" min="1" max="12" value="${o.cnt||1}"></div>
     <div class="row" style="justify-content:flex-end;margin-top:10px">
       ${(o.cnt||1)>1?'<button class="btn" id="mSplit">Szétbontás</button>':''}
@@ -1964,6 +2023,8 @@ function openOpModal(o){
     </div>`;
   $('#modalWrap').classList.add('open');
   $('#mClose').onclick=()=>$('#modalWrap').classList.remove('open');
+  $('#mAltSel').onchange=e=>{const v=e.target.value;if(v==='__x'){$('#mAlt').value='';$('#mAlt').focus();}else if(v)$('#mAlt').value=v;};
+  $$('#modal [data-alt]').forEach(b=>b.onclick=()=>{$('#mAlt').value=b.dataset.alt;const s=$('#mAltSel');s.value=[...s.options].some(x=>x.value===b.dataset.alt)?b.dataset.alt:'';});
   $('#mFreq').onchange=e=>{
     const f=S.freqOps[e.target.value];if(!f)return;
     $('#mAlt').value=f.alt;$('#mW').value=f.ow;$('#mH').value=f.oh;$('#mSh').value=f.sh;$('#mPm').value=f.pm;
@@ -2104,7 +2165,7 @@ function panel(){
   if(ws.length){
     const w0=ws[0];
     html+=`<div class="sec"><h4>Kijelölt falak (${ws.length} db)</h4>
-      ${ws.length===1?`<div class="row"><label>Belső hossz (m)</label><input id="wLen" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(wLen(w0))}"></div>
+      ${ws.length===1?`<div class="row"><label>Belső hossz (m)</label><input id="wLen" data-disto type="text" inputmode="none" autocomplete="off" value="${r2(wLen(w0))}"></div>
       <p class="muted">${(()=>{const rr=S.rooms.find(x=>x.id===w0.roomId);return rr&&isRectRoom(rr)?'Téglalap helyiség: a szemközti oldal is ugyanígy változik.':'A fal vége (és a mögötte lévő falszakaszok) tolódnak el.';})()} A szomszéd helyiségek követik.</p>`:''}
       <div class="row"><label>Vastagság (m)</label><input id="wTh" type="number" step="0.01" value="${thOf(w0)}"></div>
       <div class="row" style="flex-wrap:wrap">${[0.10,0.12,0.25,0.30,0.38,0.45,0.50].map(v=>`<button class="btn" data-th="${v}">${Math.round(v*100)}</button>`).join('')}<span class="muted">cm</span></div>
@@ -2124,8 +2185,8 @@ function panel(){
       <div class="row"><button class="btn" id="rSec">Padlástér metszet (${esc(lvlName(lvlOf(r)))})…</button></div>
       <div class="row"><label>Kiadódó</label><label class="chk" style="flex:1"><input id="rFlex" type="checkbox" ${r.flex?'checked':''}> méretét a szomszédok adják</label></div>
       ${r.flex?'<p class="muted">Kiadódó helyiség: falai a szomszéd helyiségek falaihoz és a homlokzat vonalához igazodnak; itt gyűlnek össze a mérési/építési pontatlanságok. Kottája zárójelben.</p>':''}
-      ${isRectRoom(r)&&!r.flex?(()=>{const b=rectBox(r);return `<div class="row"><label>Vízszintes ↔ (m)</label><input id="rW" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.x2-b.x1)}"></div>
-      <div class="row"><label>Függőleges ↕ (m)</label><input id="rHh" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.y2-b.y1)}"></div>`;})():''}
+      ${isRectRoom(r)&&!r.flex?(()=>{const b=rectBox(r);return `<div class="row"><label>Vízszintes ↔ (m)</label><input id="rW" data-disto type="text" inputmode="none" autocomplete="off" value="${r2(b.x2-b.x1)}"></div>
+      <div class="row"><label>Függőleges ↕ (m)</label><input id="rHh" data-disto type="text" inputmode="none" autocomplete="off" value="${r2(b.y2-b.y1)}"></div>`;})():''}
       <div class="row"><label>Belmagasság (m)</label><input id="rH" type="number" step="0.05" value="${rH(r)}"></div>
       ${Object.keys(CATS).filter(k=>k!=='func').map(k=>`<div class="row"><label>${CATS[k].label}</label><input data-rc="${k}" list="dl_${k}" placeholder="—" value="${esc(getV(r,k))}"></div>
         <datalist id="dl_${k}">${catOpts(k).map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`).join('')}
