@@ -2411,7 +2411,7 @@ const acts={
   toggleGrid(){$('#chkGrid').checked=!$('#chkGrid').checked;render();},
   toggleDim(){$('#chkDim').checked=!$('#chkDim').checked;render();},
   distoLog(){const txt=distoLogA.length?distoLogA.join('\n'):'(üres – csatlakozz a DISTO gombbal)';const m=$('#modal');m.innerHTML=`<h3><span>DISTO napló</span><button class="btn" id="mClose">✕</button></h3><textarea readonly style="width:100%;height:300px;font:11px monospace">${esc(txt)}</textarea><p class="muted">Ha a mérésindítás nem működik, másold ki és küldd el ezt a szöveget.</p>`;$('#modalWrap').classList.add('open');$('#mClose').onclick=()=>$('#modalWrap').classList.remove('open');},
-  distoCmd(){const v=prompt('DISTO mérésindító parancs (a 3ab10109 parancs-csatornára küldve; alapértelmezés: g):',S.b.distoCmd||'g');if(v!==null){S.b.distoCmd=v||'g';save();}},
+  distoCmd(){const v=prompt('DISTO mérésindító parancs (szöveg, pl. g – vagy bájtsor: hex:67 0d 0a). A parancs-csatornára megy (3ab10109 vagy 3ab10120):',S.b.distoCmd||'g');if(v!==null){S.b.distoCmd=v||'g';save();}},
   defTh10(){S.b.defTh=0.10;save();updateTopInfo();},
   defTh12(){S.b.defTh=0.12;save();updateTopInfo();},
   defTh30(){S.b.defTh=0.30;save();updateTopInfo();},
@@ -2500,11 +2500,17 @@ async function distoTrigger(){
     return;
   }
   try{
-    const data=new TextEncoder().encode(S.b.distoCmd||'g');dlog('Indító parancs küldése: "'+(S.b.distoCmd||'g')+'"');
-    if(distoCmdChar.writeValueWithResponse)await distoCmdChar.writeValueWithResponse(data);else await distoCmdChar.writeValue(data);
+    // parancs: szöveg (pl. g), vagy hex:… bájtsor (pl. hex:67 0d 0a)
+    const cmd=S.b.distoCmd||'g';
+    const data=/^hex:/i.test(cmd)?new Uint8Array(cmd.slice(4).trim().split(/[\s,]+/).filter(Boolean).map(h=>parseInt(h,16))):new TextEncoder().encode(cmd);
+    dlog('Indító parancs ('+distoCmdChar.uuid.slice(4,8)+'): '+cmd);
+    const p=distoCmdChar.properties;
+    if(p.write&&distoCmdChar.writeValueWithResponse)await distoCmdChar.writeValueWithResponse(data);
+    else if(p.writeWithoutResponse&&distoCmdChar.writeValueWithoutResponse)await distoCmdChar.writeValueWithoutResponse(data);
+    else await distoCmdChar.writeValue(data);
     $('#measOv').classList.add('busy');$('#moHint').textContent='Mérés…';
     clearTimeout(measWait);measWait=setTimeout(()=>{$('#measOv').classList.remove('busy');$('#moHint').textContent='Nem jött mérés – próbáld újra, vagy nyomd meg a DIST gombot';},6000);
-  }catch(err){dlog('Indítás hiba: '+err.message);$('#moHint').textContent='Indítás sikertelen ('+err.message+') – nyomd meg a DIST gombot';}
+  }catch(err){dlog('Indítás hiba: '+errTxt(err));$('#moHint').textContent='Indítás sikertelen ('+errTxt(err)+') – nyomd meg a DIST gombot';}
 }
 function startMeasure(){
   measureMode=true;kbBuf='';$('#measOv').classList.add('on');$('#btnMeas').classList.add('active');
@@ -2525,30 +2531,48 @@ window.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key==='Tab')&&kbBuf){const v=parseFloat(kbBuf.replace(',','.'));kbBuf='';e.preventDefault();e.stopPropagation();if(Number.isFinite(v))onDisto(v);return;}
   if(e.key==='Escape'){stopMeasure();e.preventDefault();e.stopPropagation();}
 },true);
+// DISTO-generációk: régi (D110, D2 első verzió, D510…): távolság 3ab10101, parancs 3ab10109;
+// újabb (X3/X4, D2-2…): mérés 3ab1010d ("BASIC_MEASUREMENT", első 4 bájt float, little endian), parancs 3ab10120.
+const DISTO_DIST_IDS=['3ab10101','3ab1010d'],DISTO_CMD_IDS=['3ab10109','3ab10120'];
+const errTxt=e=>(e&&(e.message||e.name))||String(e);
+let distoAllChars=[];
 $('#btnDisto').onclick=async()=>{
-  if(!navigator.bluetooth){alert('Ebben a böngészőben nincs Web Bluetooth. Chrome vagy Edge kell (Windows, Android). iPad/iPhone Safari nem támogatja – ott a DISTO billentyűzet módja használható a Mérés móddal.');return;}
+  if(!navigator.bluetooth){alert('Ebben a böngészőben nincs Web Bluetooth. Chrome vagy Edge kell (Windows, Android), iPaden a Bluefy böngésző.');return;}
   try{
     const dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'DISTO'},{services:[DISTO_SVC]}],optionalServices:[DISTO_SVC]});
     dlog('Eszköz: '+(dev.name||'(név nélkül)'));
     const srv=await dev.gatt.connect();dlog('GATT csatlakozva');
     const svc=await srv.getPrimaryService(DISTO_SVC);
-    try{const cs=await svc.getCharacteristics();dlog('Csatornák: '+cs.map(c=>c.uuid.slice(4,8)+'['+(c.properties.notify?'N':'')+(c.properties.indicate?'I':'')+(c.properties.write?'W':'')+(c.properties.writeWithoutResponse?'w':'')+']').join(' '));}catch(e){dlog('Csatornalista hiba: '+e.message);}
-    distoChar=await svc.getCharacteristic(DISTO_DIST);
-    await distoChar.startNotifications();
-    distoChar.addEventListener('characteristicvaluechanged',ev=>{
-      const dv=ev.target.value;dlog('Adat: '+hex(dv)+(dv.byteLength>=4?' = '+dv.getFloat32(0,true).toFixed(4):''));if(dv.byteLength<4)return;
-      const val=dv.getFloat32(0,true);
-      if(Number.isFinite(val)&&val>0)onDisto(val);
-    });
-    try{distoCmdChar=await svc.getCharacteristic(DISTO_CMD);dlog('Parancs-csatorna megvan (3ab10109)');}catch(e){distoCmdChar=null;dlog('Nincs parancs-csatorna: '+e.message);}
+    const cs=await svc.getCharacteristics();distoAllChars=cs;
+    const sid=c=>c.uuid.slice(4,8);
+    dlog('Csatornák: '+cs.map(c=>sid(c)+'['+(c.properties.read?'R':'')+(c.properties.notify?'N':'')+(c.properties.indicate?'I':'')+(c.properties.write?'W':'')+(c.properties.writeWithoutResponse?'w':'')+']').join(' '));
+    let distC=null;for(const id of DISTO_DIST_IDS){distC=cs.find(c=>c.uuid.startsWith(id));if(distC)break;}
+    dlog(distC?'Mérés-csatorna: '+sid(distC):'Nincs ismert mérés-csatorna – minden csatornát naplózok');
+    // minden értesítő csatornára feliratkozunk (az újabb DISTO-k csak így küldik a mérést), és mindet naplózzuk
+    for(const c of cs){
+      if(!(c.properties.notify||c.properties.indicate))continue;
+      try{
+        await c.startNotifications();
+        c.addEventListener('characteristicvaluechanged',ev=>{
+          const dv=ev.target.value,f=dv.byteLength>=4?dv.getFloat32(0,true):NaN;
+          dlog(sid(c)+': '+hex(dv)+(Number.isFinite(f)?' = '+f.toFixed(4):''));
+          if(c===distC&&Number.isFinite(f)&&f>0.001&&f<400)onDisto(f);
+        });
+      }catch(e){dlog('Feliratkozás hiba '+sid(c)+': '+errTxt(e));}
+    }
+    distoChar=distC||cs[0]||null;
+    distoCmdChar=null;
+    for(const id of DISTO_CMD_IDS){const c=cs.find(x=>x.uuid.startsWith(id)&&(x.properties.write||x.properties.writeWithoutResponse));if(c){distoCmdChar=c;break;}}
+    dlog(distoCmdChar?'Parancs-csatorna: '+sid(distoCmdChar):'Nincs parancs-csatorna');
     dev.addEventListener('gattserverdisconnected',()=>{dlog('Kapcsolat megszakadt');distoChar=null;distoCmdChar=null;$('#btnDisto').classList.remove('active');if(measureMode)updMeasOv();});
     $('#btnDisto').classList.add('active');
     if(measureMode)updMeasOv();
   }catch(err){
-    dlog('Csatlakozási hiba: '+err.message);
-    alert('DISTO csatlakozás sikertelen: '+err.message+'\n\nEllenőrizd: Bluetooth bekapcsolva a műszeren, nincs más alkalmazáshoz (pl. Windows billentyűzetként vagy DISTO Plan apphoz) csatlakozva, és a Bluetooth mód nem „billentyűzet” (HID).');
+    dlog('Csatlakozási hiba: '+errTxt(err));
+    alert('DISTO csatlakozás sikertelen: '+errTxt(err)+'\n\nEllenőrizd: a műszeren be van-e kapcsolva a Bluetooth, és nincs-e más alkalmazáshoz vagy az iPad Bluetooth-beállításaiban csatlakoztatva.');
   }
 };
+
 
 svg.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('keyup',e=>{if(e.code==='Space'){spaceDown=false;svg.style.cursor=tool==='select'?'default':tool==='pan'?'grab':'crosshair';}});
