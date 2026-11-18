@@ -1,0 +1,2573 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head><meta name="allchatbots-layout" content="large">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Felmérő">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0f172a">
+<title>Épületfelmérő – Sketch CAD Tablet</title>
+<style>
+:root{
+  --bg:#1d1f22;--p:#2b2d30;--p2:#232428;--bd:#41454b;
+  --tx:#e7eaed;--mu:#a0a6ad;--ac:#3b82f6;--ok:#34d399;--wn:#f59e0b;--dn:#ef4444;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-touch-callout:none;background:var(--bg);color:var(--tx);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;user-select:none;-webkit-user-select:none}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+#app{height:100vh;display:flex;flex-direction:column}
+
+/* Menubar */
+#menubar{height:29px;flex:none;display:flex;align-items:center;background:#17191b;border-bottom:1px solid var(--bd);padding:0 8px;z-index:80}
+.brand{font-weight:700;margin-right:10px;color:#fff}
+.mi{position:relative;padding:5px 9px;border-radius:4px;cursor:pointer}
+.mi:hover,.mi.open{background:#36393e}
+.drop{display:none;position:absolute;top:26px;left:0;min-width:225px;padding:4px;background:var(--p);border:1px solid var(--bd);border-radius:6px;box-shadow:0 8px 25px #0009;z-index:100}
+.mi.open .drop{display:block}
+.drop button{display:flex;width:100%;justify-content:space-between;border:0;background:none;color:var(--tx);padding:7px 10px;text-align:left;border-radius:4px}
+.drop button:hover{background:var(--ac);color:#fff}
+.drop hr{border:0;border-top:1px solid var(--bd);margin:4px 0}
+.title{margin-left:auto;color:var(--mu);font-size:11px}
+
+/* Toolbar */
+#toolbar{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:5px 7px;background:var(--p);border-bottom:1px solid var(--bd);flex:none;z-index:50}
+.g{display:flex;align-items:center;gap:3px;padding-right:7px;border-right:1px solid var(--bd)}
+.g:last-child{border:0}
+.tb{border:1px solid var(--bd);border-radius:4px;background:var(--p2);color:var(--tx);padding:4px 8px;min-height:30px;font-size:12px;display:inline-flex;align-items:center;gap:4px;position:relative}
+.tb:hover{background:#3a3e44}
+.tb.active{background:var(--ac);border-color:#70a7fa;color:#fff}
+.tb:disabled{opacity:.38;cursor:default}
+.tb,.btn,button{touch-action:manipulation}
+.chip{border-style:dashed;border-color:#70a7fa;touch-action:none;cursor:grab}
+.chip:active{cursor:grabbing}
+.chk{display:flex;align-items:center;gap:4px;padding:0 3px;font-size:12px;cursor:pointer}
+.fld{height:29px;width:68px;border:1px solid var(--bd);border-radius:4px;background:var(--p2);color:var(--tx);padding:3px 6px}
+.pop-wrap{position:relative;display:inline-flex}
+.pop{display:none;position:absolute;top:34px;left:0;min-width:210px;background:var(--p);border:1px solid var(--bd);border-radius:6px;box-shadow:0 8px 25px #000a;z-index:120;padding:4px;max-height:300px;overflow:auto}
+.pop.open{display:block}
+.pop button{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;background:none;color:var(--tx);padding:6px 8px;text-align:left;border-radius:4px;font-size:12px}
+.pop button:hover{background:var(--ac);color:#fff}
+.pop .sub{color:var(--mu);font-size:11px}
+
+/* Main */
+#main{display:flex;flex:1;min-height:0}
+#wrap{position:relative;flex:1;min-width:0;overflow:hidden;background:#17191b}
+#plan{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+#badge{position:absolute;left:10px;bottom:10px;pointer-events:none;background:#111c;border:1px solid #555;border-radius:5px;padding:5px 8px;color:#cbd5e1;font-size:11px;max-width:calc(100% - 20px)}
+#paintBanner{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#1e3a8a;border:1px solid #60a5fa;color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;z-index:40;box-shadow:0 4px 12px #0007;align-items:center;gap:8px}
+#paintBanner.on{display:flex}
+#paintBanner button{background:#ffffff22;border:1px solid #ffffff55;color:#fff;border-radius:12px;padding:2px 8px;font-size:11px}
+
+/* Sidebar */
+aside{width:315px;flex:none;display:flex;flex-direction:column;background:var(--p);border-left:1px solid var(--bd)}
+.tabs{display:flex;background:var(--p2);border-bottom:1px solid var(--bd)}
+.tab{flex:1;padding:8px 2px;border:0;border-bottom:2px solid transparent;background:none;color:var(--mu);font-size:11px}
+.tab.active{color:#fff;border-bottom-color:var(--ac);background:var(--p)}
+#panel{overflow:auto;padding:10px;flex:1}
+.sec{padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--bd)}
+h4{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#93c5fd;margin:0 0 8px}
+.row{display:flex;align-items:center;gap:6px;margin:6px 0}
+.row label{width:112px;flex:none;color:var(--mu);font-size:12px}
+.row label.chk{width:auto;flex:1}
+.row .chk input{flex:none;width:18px;height:18px;padding:0;min-width:18px}
+.row input,.row select,.row textarea{min-width:0;flex:1;background:var(--p2);border:1px solid var(--bd);border-radius:4px;color:var(--tx);padding:5px}
+.btn{border:1px solid var(--bd);border-radius:4px;background:#393d43;color:var(--tx);padding:5px 8px;font-size:12px}
+.btn:hover{background:#4b5058}
+.pri{background:var(--ac);border-color:#60a5fa;color:#fff}
+.dan{background:#7f1d1d;border-color:#ef4444;color:#fff}
+.muted{color:var(--mu);font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border-bottom:1px solid var(--bd);padding:4px 3px;text-align:left}
+tr.selrow{background:#1e3a8a55}
+
+/* Modal & Ghost */
+#modalWrap{display:none;position:fixed;inset:0;background:#0008;z-index:200;align-items:center;justify-content:center}
+#modalWrap.open{display:flex}
+#measOv{display:none;position:fixed;inset:0;background:rgba(220,38,38,.30);z-index:300;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:12px;touch-action:none;user-select:none}
+#measOv.on{display:flex}
+#measOv .mo-box{background:#111827ee;border:1px solid #f87171;border-radius:12px;padding:10px 14px;min-width:300px;text-align:center;color:#fff}
+#measOv .mo-t{font-weight:700;color:#fca5a5}
+#measOv #moVal{font-size:42px;font-weight:700;margin:4px 0;font-variant-numeric:tabular-nums}
+#measOv .mo-btns{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+#measOv .mo-btns button{background:#374151;color:#fff;border:1px solid #6b7280;border-radius:8px;padding:8px 12px;font-size:14px}
+#measOv .mo-hint{margin-top:auto;margin-bottom:40px;font-size:22px;font-weight:600;color:#fff;text-shadow:0 1px 4px #000}
+#measOv.busy .mo-hint{color:#fde68a}
+#modal{background:var(--p);border:1px solid var(--bd);border-radius:8px;padding:14px;width:340px;max-width:94vw;max-height:94vh;overflow:auto;box-shadow:0 12px 36px #000b}
+#modal.wide{width:820px}
+.sectab{border-collapse:collapse;font-size:12px;width:100%;margin-top:6px}.sectab td,.sectab th{border-bottom:1px solid var(--bd);padding:2px 4px;text-align:right}.sectab td:first-child,.sectab th:first-child{text-align:left}
+#printArea .sectab{font-size:1em}#printArea .sectab td,#printArea .sectab th{border-bottom:0.2mm solid #999;padding:0.2mm 0.6mm}
+.p-secbox{position:absolute;right:1.5mm;bottom:1.5mm;width:72mm;background:#fff;border:0.3mm solid #000;padding:1mm;font-size:7pt}
+#modal h3{margin:0 0 10px;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+#ghost{display:none;position:fixed;pointer-events:none;z-index:300;background:#3b82f6dd;color:#fff;padding:4px 9px;border-radius:4px;font-size:12px;transform:translate(-50%,-130%)}
+
+.pop hr{border:0;border-top:1px solid var(--bd);margin:4px 0}
+.pop .x{color:#fcd34d}
+textarea{resize:vertical}
+
+/* Print A4 (a méretezéshez képernyőn is érvényes, de rejtett) */
+#printArea{display:none;position:relative;width:210mm;height:297mm;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden;user-select:text}
+#printArea.measure{display:block;position:fixed;left:-5000px;top:0}
+.p-left{position:absolute;left:5mm;top:5mm;width:150mm;height:287mm;display:flex;flex-direction:column}
+.p-cust{height:17mm;border:0.3mm solid #000;padding:1mm 1.5mm;font-size:8pt}
+.p-prop{height:11mm;border:0.3mm solid #000;border-top:0;padding:1mm 1.5mm;font-size:8pt}
+.p-plan{flex:1;border:0.5mm solid #000;margin-top:2mm;position:relative;overflow:hidden}
+.p-legend{position:absolute;left:1.5mm;bottom:1mm;font-size:6.5pt;background:#fff;padding:0.5mm 1mm}
+.p-right{position:absolute;left:158mm;top:5mm;width:47mm;height:287mm;display:flex;flex-direction:column;gap:1.4mm;overflow:hidden;font-size:7.5pt;line-height:1.22}
+.p-box{flex:none;border:0.3mm solid #000;padding:0.8mm 1.5mm}
+.p-box>b{display:block;font-size:.9em;color:#333;margin-bottom:0.3mm}
+.p-box ul{margin:0;padding:0;list-style:none}
+.p-box li{margin:0.25mm 0;padding-left:2mm;text-indent:-2mm}
+.p-box li:before{content:"– "}
+.p-box .pn{font-style:italic;color:#333}
+.p-sec{flex:1 1 auto;min-height:8mm}
+.pp-wrap{position:absolute;inset:5mm;display:flex;flex-direction:column}
+.pp-head{display:grid;grid-auto-flow:column;grid-template-columns:2fr 2.4fr 1fr 1fr;grid-auto-columns:1fr;border:0.3mm solid #000;font-size:9pt}
+.pp-head>div{padding:1mm 1.8mm;border-right:0.3mm solid #000;min-height:9mm}
+.pp-head>div:last-child{border-right:0}
+.pp-head b{display:block;font-size:7pt;color:#333}
+.pp-plan{flex:1;border:0.5mm solid #000;margin-top:2mm;position:relative;overflow:hidden}
+@media (max-width:820px){
+  #main{flex-direction:column}
+  aside{width:100%;height:245px;border-left:0;border-top:1px solid var(--bd)}
+}
+@media print{
+  @page{size:A4;margin:0}
+  html,body{background:#fff;color:#000;height:auto;overflow:visible}
+  #app,#modalWrap,#ghost{display:none!important}
+  #printArea{display:block!important;position:relative!important;left:0!important}
+}
+</style>
+<style id="pageStyle">@page{size:A4 portrait;margin:0}</style>
+</head>
+<body>
+<div id="app">
+  <div id="menubar">
+    <span class="brand">Épületfelmérő</span>
+    <span class="mi" data-menu>Fájl
+      <span class="drop">
+        <button data-act="newDoc">Új felmérés</button>
+        <button data-act="saveJson">Mentés (.json)</button>
+        <button data-act="loadJson">Betöltés (.json)</button>
+        <hr>
+        <button data-act="exportXls">Excel export WinWatt-hoz (.xlsx)</button>
+        <button data-act="printA4">Felmérési lap nyomtatás (A4)</button>
+        <button data-act="printPlan">Csak rajz nyomtatás / PDF (A4, fejléccel)</button>
+      </span>
+    </span>
+    <span class="mi" data-menu>Szerkesztés
+      <span class="drop">
+        <button data-act="undo">Vissza <span>Ctrl+Z</span></button>
+        <button data-act="redo">Mégis <span>Ctrl+Y</span></button>
+        <hr>
+        <button data-act="delSel">Kijelöltek törlése <span>Del</span></button>
+        <hr>
+        <button data-act="selExt">Összes külső fal kijelölése</button>
+        <button data-act="selInt">Összes belső (közös) fal kijelölése</button>
+        <button data-act="selAll">Összes fal kijelölése</button>
+        <hr>
+        <button data-act="clearPins">Homlokzat-igazítások törlése</button>
+      </span>
+    </span>
+    <span class="mi" data-menu>Nézet
+      <span class="drop">
+        <button data-act="zoomIn">Nagyítás <span>+</span></button>
+        <button data-act="zoomOut">Kicsinyítés <span>−</span></button>
+        <button data-act="fitView">Teljes rajz (minden szint)</button>
+        <button data-act="fitLevel">Aktuális szint</button>
+        <button data-act="levels">Szintek…</button>
+        <hr>
+        <button data-act="toggleGrid">Rács be/ki</button>
+        <button data-act="toggleDim">Kotta be/ki</button>
+        <button data-act="toggleOverall">Teljes külső méret be/ki</button>
+      </span>
+    </span>
+    <span class="mi" data-menu>Beállítások
+      <span class="drop">
+        <button data-act="distoCmd">DISTO mérésindító parancs…</button>
+        <button data-act="distoLog">DISTO napló</button>
+        <hr>
+        <button data-act="defTh10">Rajzolási falvastagság: 10 cm (vázlat)</button>
+        <button data-act="defTh12">Rajzolási falvastagság: 12 cm</button>
+        <button data-act="defTh30">Rajzolási falvastagság: 30 cm</button>
+        <button data-act="defTh38">Rajzolási falvastagság: 38 cm</button>
+        <hr>
+        <button data-act="scale50">Lépték 1:50</button>
+        <button data-act="scale100">Lépték 1:100</button>
+        <button data-act="scale200">Lépték 1:200</button>
+      </span>
+    </span>
+    <span class="title" id="topInfo">Alap fal: 30 cm · Lépték 1:100</span>
+  </div>
+
+  <div id="toolbar">
+    <div class="g">
+      <button class="tb active" data-tool="select">Kijelölés</button>
+      <button class="tb" data-tool="rect">Téglalap</button>
+      <button class="tb" data-tool="wall">Fal</button>
+      <button class="tb" id="btnLevel" title="Szintek: új szint, váltás, bázispont, segédkontúr, padlástér metszet">Szint: Földszint ▾</button>
+      <button class="tb" data-tool="pan" title="Vászon mozgatása (egérrel: jobb gomb vagy szóköz + húzás; tableten 2 ujj)">✋ Mozgatás</button>
+    </div>
+    <div class="g">
+      <button id="btnUndo" class="tb" title="Vissza (Ctrl+Z)" disabled>↶ Vissza</button>
+      <button id="btnRedo" class="tb" title="Mégis (Ctrl+Y)" disabled>↷ Mégis</button>
+    </div>
+    <div class="g">
+      <button class="tb chip" data-pal="Ablak">Ablak</button>
+      <button class="tb chip" data-pal="Ajtó">Ajtó</button>
+      <button class="tb chip" data-pal="Erkélyajtó">Erkélyajtó</button>
+      <span class="pop-wrap">
+        <button id="btnFreqOp" class="tb" title="Gyakori / előző nyílászárók">☰</button>
+        <div id="popFreqOp" class="pop"></div>
+      </span>
+    </div>
+    <div class="g">
+      <span class="pop-wrap"><button class="tb catBtn" data-cat="floor" title="Padló típusa (kiválasztás után koppints a helyiségre)">Padló ▾</button><div class="pop" data-catpop="floor"></div></span>
+      <span class="pop-wrap"><button class="tb catBtn" data-cat="slab" title="Födém típusa (kiválasztás után koppints a helyiségre)">Födém ▾</button><div class="pop" data-catpop="slab"></div></span>
+    </div>
+    <div class="g">
+      <span class="pop-wrap"><button class="tb catBtn" data-cat="heat" title="Fűtés (kiválasztás után koppints a helyiségre, vagy: Összes helyiség)">Fűtés ▾</button><div class="pop" data-catpop="heat"></div></span>
+      <span class="pop-wrap"><button class="tb catBtn" data-cat="dhw" title="Használati melegvíz">HMV ▾</button><div class="pop" data-catpop="dhw"></div></span>
+      <span class="pop-wrap"><button class="tb catBtn" data-cat="light" title="Világítás">Világítás ▾</button><div class="pop" data-catpop="light"></div></span>
+      <span class="pop-wrap"><button class="tb catBtn" data-cat="ren" title="Megújuló energia">Megújuló ▾</button><div class="pop" data-catpop="ren"></div></span>
+      <span class="pop-wrap"><button class="tb catBtn" data-cat="func" title="Helyiség funkciója/neve (pl. konyha, WC) – kiválasztás után koppints a helyiségekre">Helyiség ▾</button><div class="pop" data-catpop="func"></div></span>
+    </div>
+    <div class="g">
+      <label class="chk" title="Falak többes kijelölése koppintással (tableten a Ctrl helyett)"><input id="chkMulti" type="checkbox">Többes</label>
+      <label class="chk"><input id="chkGrid" type="checkbox" checked>Rács</label>
+      <select id="gridStep" class="fld">
+        <option value="0.05">0,05 m</option>
+        <option value="0.1" selected>0,10 m</option>
+        <option value="0.25">0,25 m</option>
+        <option value="0.5">0,50 m</option>
+      </select>
+      <label class="chk"><input id="chkCad" type="checkbox" checked>CAD</label>
+      <label class="chk" title="A referencia-szint külső kontúrja segédvonalként"><input id="chkGhost" type="checkbox" checked>Kontúr</label>
+      <label class="chk" title="Új helyiség automatikus illesztése a szomszédhoz (közös fal, egyenes homlokzat); falvastagság/méret módosításakor a szomszédok eltolódnak"><input id="chkJoin" type="checkbox" checked>Illesztés</label>
+      <label class="chk"><input id="chkDim" type="checkbox" checked>Kotta</label>
+    </div>
+    <div class="g">
+      <input id="distVal" class="fld" type="number" step="0.01" min="0" placeholder="m">
+      <button id="btnDisto" class="tb" title="Leica DISTO Bluetooth csatlakoztatása (app/BLE mód)">DISTO</button>
+      <button id="btnMeas" class="tb" title="Mérés mód: piros képernyő, érintésre a DISTO mér, az érték az aktív méretmezőbe kerül">🔴 Mérés</button>
+      <button id="btnApplyDist" class="tb" title="Következő fal hossza">Mérés→fal</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="wrap">
+      <svg id="plan" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="paintBanner">
+        <span id="paintTxt">Koppints a helyiségre</span>
+        <button id="paintAll">Összes helyiség</button>
+        <button id="paintStop">Kész</button>
+      </div>
+      <div id="badge">Kijelölés: koppints falra/helyiségre, vagy húzz keretet (bal→jobb: teljes, jobb→bal: érintett). 2 ujjal mozgatás/zoom.</div>
+    </div>
+    <aside>
+      <div class="tabs">
+        <button class="tab active" data-tab="props">Tulajdonságok</button>
+        <button class="tab" data-tab="rooms">Helyiségek</button>
+        <button class="tab" data-tab="building">Épület / Export</button>
+      </div>
+      <div id="panel"></div>
+    </aside>
+  </div>
+</div>
+
+<div id="ghost"></div>
+<div id="modalWrap"><div id="modal"></div></div>
+<div id="measOv"><div class="mo-box">
+  <div><span class="mo-t">MÉRÉS MÓD</span> · <span id="moStat"></span></div>
+  <div id="moTarget" class="muted"></div>
+  <div id="moVal">—</div>
+  <div class="mo-btns"><button id="moPrev">◀ Előző mező</button><button id="moNext">Következő mező ▶</button><button id="moExit">✕ Kilépés</button></div>
+</div><div class="mo-hint" id="moHint">Érintsd meg a képernyőt a méréshez</div></div>
+<div id="printArea"></div>
+<input id="fileIn" type="file" accept=".json" style="display:none">
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const svg=$('#plan'),NS='http://www.w3.org/2000/svg';
+const SK='epuletfelmero_cad_v5',SK_OLD='epuletfelmero_cad_v4';
+const FLOORS=['csap.h. park.','laminált park.','gres','kerámia','padlószőnyeg','PVC','beton','pince'];
+const SLABS=['vasbeton','fagerendás','béléstestes','monolit vb.','gipszkarton álm.','tetőtér beép.','lapostető'];
+const HEAT=['vegyes tüzelés','konvektor','kond. gázkazán','hagy. gázkazán','hőszivattyú','elektromos fűtés','távfűtés','cserépkályha / kandalló'];
+const DHW=['villanybojler','átfolyós fali vízmelegítő','gázbojler','kazánról (indirekt tároló)','kombi kazán','hőszivattyús HMV'];
+const LIGHT=['LED','kompakt fénycső','hagyományos izzó','fénycső','halogén'];
+const REN=['napelem','napkollektor','hőszivattyú','biomassza','nincs'];
+const WALL_MATS=['Tégla 38','Tégla 30','Tégla 25','Válaszfal 12','Válaszfal 10','Porotherm 30','Porotherm 38','Ytong 30','Vályog','Kő','Vasbeton','Panel','Könnyűszerkezet'];
+const CATS={
+  floor:{label:'Padló',opts:FLOORS},
+  slab:{label:'Födém',opts:SLABS},
+  heat:{label:'Fűtés',opts:HEAT,note:'heatNote'},
+  dhw:{label:'HMV',opts:DHW,note:'dhwNote'},
+  light:{label:'Világítás',opts:LIGHT,note:'lightNote'},
+  ren:{label:'Megújuló',opts:REN,note:'pvNote'}
+};
+const SYS_KEYS=['heat','dhw','light','ren'];
+const FUNCS=['lakószoba','nappali','hálószoba','konyha','étkező','kamra','fürdőszoba','WC','fürdő+WC','előszoba','közlekedő','gardrób','tároló','kazánház','mosókonyha','garázs','pince','padlás'];
+CATS.func={label:'Helyiség',opts:FUNCS};
+function getV(r,k){if(k==='func')return r.func||'';return k==='floor'?(r.floor||''):k==='slab'?(r.slab||''):((r.sys||{})[k]||'');}
+function setV(r,k,v){if(k==='func'){r.func=v;if(v)r.name=v.charAt(0).toUpperCase()+v.slice(1);return;}if(k==='floor')r.floor=v;else if(k==='slab')r.slab=v;else{r.sys=r.sys||{};r.sys[k]=v;}}
+function catOpts(k){
+  const base=CATS[k].opts.slice();
+  S.rooms.forEach(r=>{const v=getV(r,k);if(v&&!base.includes(v))base.push(v);});
+  return base;
+}
+function rH(r){return r.height||S.b.bm;}
+const DEFAULT_OPS=[
+  {type:'Ablak',alt:'Műanyag 2r.',ow:1.4,oh:1.5,sh:0.3,pm:0.9},
+  {type:'Ablak',alt:'Műanyag 2r.',ow:1.2,oh:1.5,sh:0,pm:0.9},
+  {type:'Ablak',alt:'Fa gerébtokos',ow:1.0,oh:1.2,sh:0,pm:0.9},
+  {type:'Ablak',alt:'WC/fürdő',ow:0.6,oh:0.6,sh:0,pm:1.6},
+  {type:'Ajtó',alt:'Beltéri',ow:0.9,oh:2.1,sh:0,pm:0},
+  {type:'Ajtó',alt:'Bejárati',ow:1.0,oh:2.1,sh:0,pm:0},
+  {type:'Erkélyajtó',alt:'Műanyag',ow:0.9,oh:2.4,sh:0.3,pm:0}
+];
+
+let S=loadState();
+let tool='select',tab='props';
+let selWalls=new Set(),selRoom=null,selOp=null;
+let undoStack=[],redoStack=[];
+let draft=[],guides=[],cadPt=null;
+let paintMode=null,showOverall=false,hoverPt=null,spaceDown=false,printWide=false; // {kind:'floor'|'slab', val:'...'}
+let view={x:-2,y:-2,w:18,h:12}; // méterben a látható nézet
+let drag=null,pinch=null,palDrag=null,modalOp=null;
+let distoChar=null;
+
+function defState(){
+  return {
+    b:{cust:'',addr:'',hrsz:'',date:new Date().toISOString().slice(0,10),orient:0,bm:2.7,pm:0.4,scale:100,defTh:0.12,wallNote:'',slabNote:'',winNote:'',heatNote:'',dhwNote:'',lightNote:'',pvNote:'',note:''},
+    rooms:[],
+    walls:[],
+    openings:[],
+    freqOps:JSON.parse(JSON.stringify(DEFAULT_OPS)),
+    pins:[],
+    levels:[{id:'L0',name:'Földszint',bx:0,by:0,ref:null,section:null}],
+    curLevel:'L0'
+  };
+}
+function normalize(p){
+  const d=defState();
+  p.b=Object.assign(d.b,p.b||{});
+  if(!p.b.defTh)p.b.defTh=0.30;
+  p.rooms=(p.rooms||[]).map(r=>({...r,sys:Object.assign({heat:'',dhw:'',light:'',ren:''},r.sys||{})}));
+  p.walls=p.walls||[];p.openings=p.openings||[];
+  if(!p.freqOps)p.freqOps=d.freqOps;
+  p.pins=p.pins||[];
+  if(!Array.isArray(p.levels)||!p.levels.length)p.levels=d.levels;
+  p.rooms.forEach(r=>{if(!r.level||!p.levels.some(l=>l.id===r.level))r.level=p.levels[0].id;});
+  if(!p.levels.some(l=>l.id===p.curLevel))p.curLevel=p.levels[0].id;
+  return p;
+}
+function loadState(){
+  try{
+    const raw=localStorage.getItem(SK)||localStorage.getItem(SK_OLD);
+    if(raw){
+      const p=JSON.parse(raw);
+      if(p&&Array.isArray(p.walls))return normalize(p);
+    }
+  }catch(e){}
+  return defState();
+}
+function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
+function uid(){return Math.random().toString(36).slice(2,9);}
+function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function r2(n){return Math.round(n*100)/100;}
+function r3(n){return Math.round(n*1000)/1000;}
+// magyar számformátum: hu(2.70)="2,7", hu(4.2,2,true)="4,20"
+function hu(n,d=2,fixed=false){
+  if(n==null||!isFinite(n))return '';
+  let s=Number(n).toFixed(d);
+  if(!fixed&&s.includes('.'))s=s.replace(/0+$/,'').replace(/\.$/,'');
+  return s.replace('.',',');
+}
+
+function snapshot(){
+  undoStack.push(JSON.stringify(S));
+  if(undoStack.length>60)undoStack.shift();
+  redoStack.length=0;
+  updateUndoBtns();
+}
+function undo(){
+  if(!undoStack.length)return;
+  redoStack.push(JSON.stringify(S));
+  S=JSON.parse(undoStack.pop());
+  selWalls.clear();selRoom=null;selOp=null;
+  save();render();panel();updateUndoBtns();
+}
+function redo(){
+  if(!redoStack.length)return;
+  undoStack.push(JSON.stringify(S));
+  S=JSON.parse(redoStack.pop());
+  selWalls.clear();selRoom=null;selOp=null;
+  save();render();panel();updateUndoBtns();
+}
+function updateUndoBtns(){
+  $('#btnUndo').disabled=!undoStack.length;
+  $('#btnRedo').disabled=!redoStack.length;
+}
+
+/* Geometry */
+function wLen(w){return Math.hypot(w.x2-w.x1,w.y2-w.y1);}
+function wAng(w){return Math.atan2(w.y2-w.y1,w.x2-w.x1);}
+function wPtAt(w,t){
+  const dx=w.x2-w.x1,dy=w.y2-w.y1,L=Math.hypot(dx,dy)||1;
+  const mx=w.x1+dx*t,my=w.y1+dy*t;
+  const sag=w.sag||0;
+  if(!sag)return {x:mx,y:my,nx:-dy/L,ny:dx/L};
+  const nx=-dy/L,ny=dx/L;
+  const off=4*sag*t*(1-t);
+  return {x:mx+nx*off,y:my+ny*off,nx,ny};
+}
+function ptSegDist(px,py,x1,y1,x2,y2){
+  const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;
+  if(!l2)return {d:Math.hypot(px-x1,py-y1),t:0};
+  let t=((px-x1)*dx+(py-y1)*dy)/l2;
+  t=Math.max(0,Math.min(1,t));
+  return {d:Math.hypot(px-(x1+t*dx),py-(y1+t*dy)),t};
+}
+function roomPoly(r){
+  const ws=S.walls.filter(w=>w.roomId===r.id);
+  if(!ws.length)return [];
+  const pts=[];
+  ws.forEach(w=>{
+    pts.push({x:w.x1,y:w.y1});
+    if(w.sag){
+      for(let i=1;i<8;i++){const p=wPtAt(w,i/8);pts.push({x:p.x,y:p.y});}
+    }
+  });
+  return pts;
+}
+function roomArea(r){
+  const pts=roomPoly(r);
+  if(pts.length<3)return 0;
+  let a=0;
+  for(let i=0;i<pts.length;i++){
+    const p=pts[i],q=pts[(i+1)%pts.length];
+    a+=p.x*q.y-q.x*p.y;
+  }
+  return Math.abs(a/2);
+}
+function roomCenter(r){
+  const pts=roomPoly(r);
+  if(!pts.length)return {x:0,y:0};
+  let sx=0,sy=0;
+  pts.forEach(p=>{sx+=p.x;sy+=p.y;});
+  return {x:sx/pts.length,y:sy/pts.length};
+}
+/* Belméret-logika: a rajzolt vonal a fal BELSŐ síkja, a falvastagság kifelé (a helyiségen kívülre) épül.
+   Így kotta = belméret, terület = nettó alapterület. */
+function roomSign(rid){
+  const r=S.rooms.find(x=>x.id===rid);if(!r)return 1;
+  const pts=roomPoly(r);let a=0;
+  for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];a+=p.x*q.y-q.x*p.y;}
+  return a>0?-1:1; // szorzó a bal oldali normálishoz → kifelé mutató normális
+}
+function wTan(w,t){
+  const dx=w.x2-w.x1,dy=w.y2-w.y1,L=Math.hypot(dx,dy)||1;
+  let tx=dx/L,ty=dy/L;
+  if(w.sag){
+    const k=4*w.sag*(1-2*t)/L,nx=-ty,ny=tx;
+    tx+=nx*k;ty+=ny*k;const m=Math.hypot(tx,ty)||1;tx/=m;ty/=m;
+  }
+  return {tx,ty,nx:-ty,ny:tx};
+}
+function wNeighbor(w,end){
+  const x=end===1?w.x1:w.x2,y=end===1?w.y1:w.y2;
+  return S.walls.find(o=>o!==w&&o.roomId===w.roomId&&(end===1?Math.hypot(o.x2-x,o.y2-y)<0.02:Math.hypot(o.x1-x,o.y1-y)<0.02));
+}
+function lineX(p1,d1,p2,d2){
+  const c=d1.x*d2.y-d1.y*d2.x;if(Math.abs(c)<0.08)return null;
+  const u=((p2.x-p1.x)*d2.y-(p2.y-p1.y)*d2.x)/c;
+  return {x:p1.x+d1.x*u,y:p1.y+d1.y*u};
+}
+// a fal belső síkjával párhuzamos, kifelé eltolt vonal; f(fal) = eltolás (m); sarkokban gérbe metszve
+function offPts(w,f,s){
+  s=s??roomSign(w.roomId);
+  const N=w.sag?16:1,dw=f(w),out=[];
+  for(let i=0;i<=N;i++){
+    const t=i/N,p=i===0?{x:w.x1,y:w.y1}:i===N?{x:w.x2,y:w.y2}:wPtAt(w,t),T=wTan(w,t);
+    out.push({x:p.x+s*T.nx*dw,y:p.y+s*T.ny*dw});
+  }
+  if(dw>0)[[1,0],[2,N]].forEach(([end,idx])=>{
+    const nb=wNeighbor(w,end);if(!nb)return;
+    const P=end===1?{x:w.x1,y:w.y1}:{x:w.x2,y:w.y2};
+    const T1=wTan(w,end===1?0:1),T2=wTan(nb,end===1?1:0),dn=f(nb);
+    const a={x:P.x+s*T1.nx*dw,y:P.y+s*T1.ny*dw},b={x:P.x+s*T2.nx*dn,y:P.y+s*T2.ny*dn};
+    const X=lineX(a,{x:T1.tx,y:T1.ty},b,{x:T2.tx,y:T2.ty});
+    if(X&&Math.hypot(X.x-P.x,X.y-P.y)<Math.max(dw,dn)*4+0.01)out[idx]=X;
+  });
+  return out;
+}
+const thOf=w=>w.th||0.30;
+function wallPoly(w){
+  const s=roomSign(w.roomId);
+  return offPts(w,()=>0,s).concat(offPts(w,thOf,s).reverse());
+}
+// a fal azon hossza, amelynek külső síkján egy másik helyiség belső falsíkja fekszik (= belső válaszfal)
+function wallShare(w){
+  if(w.sag)return 0;
+  const L=wLen(w);if(L<0.05)return 0;
+  const ux=(w.x2-w.x1)/L,uy=(w.y2-w.y1)/L,s=roomSign(w.roomId),nx=-s*uy,ny=s*ux,th=thOf(w);
+  const ox=w.x1+nx*th,oy=w.y1+ny*th;
+  let sh=0;
+  S.walls.forEach(v=>{
+    if(v.roomId===w.roomId||v.sag)return;
+    const Lv=wLen(v);if(Lv<0.05)return;
+    const vx=(v.x2-v.x1)/Lv,vy=(v.y2-v.y1)/Lv;
+    if(Math.abs(ux*vy-uy*vx)>0.02)return;
+    if(Math.abs((v.x1-ox)*nx+(v.y1-oy)*ny)>0.03||Math.abs((v.x2-ox)*nx+(v.y2-oy)*ny)>0.03)return;
+    const a=(v.x1-w.x1)*ux+(v.y1-w.y1)*uy,b=(v.x2-w.x1)*ux+(v.y2-w.y1)*uy;
+    sh+=Math.max(0,Math.min(L,Math.max(a,b))-Math.max(0,Math.min(a,b)));
+  });
+  return Math.min(L,sh);
+}
+function ptInPoly(pts,px,py){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i].x,yi=pts[i].y,xj=pts[j].x,yj=pts[j].y;
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi+1e-12)+xi))inside=!inside;
+  }
+  return inside;
+}
+function bounds(){
+  return boundsOf(S.walls);
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  S.walls.forEach(w=>wallPoly(w).forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);}));
+  return isFinite(minX)?{minX,maxX,minY,maxY}:null;
+}
+// nyílászáró középpontja a falvastagság közepén
+function opPlace(o,w,t){
+  const p=wPtAt(w,t),T=wTan(w,t),s=roomSign(w.roomId),h=thOf(w)/2;
+  return {x:p.x+s*T.nx*h,y:p.y+s*T.ny*h,T,s};
+}
+function opTs(o,w){
+  const cnt=Math.max(1,o.cnt||1),L=wLen(w)||1;
+  const span=cnt>1?Math.min(0.7,cnt*(o.ow/L+0.08)):0;
+  const ts=[];
+  for(let i=0;i<cnt;i++)ts.push(cnt===1?o.pos:Math.max(0.06,Math.min(0.94,o.pos-span/2+(span/(cnt-1))*i)));
+  return ts;
+}
+function ptInRoom(px,py,r){
+  const pts=roomPoly(r);
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i].x,yi=pts[i].y,xj=pts[j].x,yj=pts[j].y;
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi+1e-12)+xi))inside=!inside;
+  }
+  return inside;
+}
+function updateRectBox(r){
+  if(!r||!r.isRect)return;
+  const ws=S.walls.filter(w=>w.roomId===r.id);
+  if(ws.length!==4)return;
+  // check axis-aligned
+}
+
+/* ===== Illesztés-motor =====
+   Kapcsolatok (a geometriából felismerve, merőleges falakra):
+   - Közös fal (válaszfal): A fal külső oldalán B helyiség belső falsíkja → B = A + falvastagság
+   - Homlokzat: két szomszédos helyiség azonos irányú külső fala → külső síkjuk egy vonalban
+   Falvastagság- vagy méretváltozáskor a helyiségek belmérete marad, a szomszédok eltolódnak. */
+function axInfo(w){
+  if(w.sag)return null;
+  const dx=w.x2-w.x1,dy=w.y2-w.y1,L=Math.hypot(dx,dy);
+  if(L<0.05)return null;
+  const s=roomSign(w.roomId);
+  if(Math.abs(dy)<0.005*L+1e-4)return {o:'h',ax:'y',c:(w.y1+w.y2)/2,lo:Math.min(w.x1,w.x2),hi:Math.max(w.x1,w.x2),s:s*Math.sign(dx)};
+  if(Math.abs(dx)<0.005*L+1e-4)return {o:'v',ax:'x',c:(w.x1+w.x2)/2,lo:Math.min(w.y1,w.y2),hi:Math.max(w.y1,w.y2),s:-s*Math.sign(dy)};
+  return null;
+}
+// forSolve: a kiadódó helyiségek kimaradnak (ők nem visznek át méretet, hanem a szomszédokhoz igazodnak)
+function detectRel(forSolve=false){
+  const flex=new Set(S.rooms.filter(r=>r.flex).map(r=>r.id));
+  const inf=new Map();S.walls.forEach(w=>{if(forSolve&&flex.has(w.roomId))return;const i=axInfo(w);if(i)inf.set(w,i);});
+  const ws=[...inf.keys()],parts=[],facs=[],partOf=new Set(),lm=roomLvlMap();
+  for(let i=0;i<ws.length;i++)for(let j=0;j<ws.length;j++){
+    const w=ws[i],v=ws[j];if(w.roomId===v.roomId||lm.get(w.roomId)!==lm.get(v.roomId))continue;
+    const a=inf.get(w),b=inf.get(v);if(a.o!==b.o||a.s!==-b.s)continue;
+    const g=(b.c-a.c)*a.s,ov=Math.min(a.hi,b.hi)-Math.max(a.lo,b.lo);
+    if(ov>0.2&&g>-0.5&&g<Math.max(thOf(w),thOf(v))+0.5){
+      partOf.add(w);partOf.add(v);
+      if(i<j)parts.push({w,v,A:w.roomId,B:v.roomId,ax:a.ax,ov});
+    }
+  }
+  for(let i=0;i<ws.length;i++)for(let j=i+1;j<ws.length;j++){
+    const w=ws[i],v=ws[j];if(w.roomId===v.roomId||partOf.has(w)||partOf.has(v)||lm.get(w.roomId)!==lm.get(v.roomId))continue;
+    const a=inf.get(w),b=inf.get(v);if(a.o!==b.o||a.s!==b.s)continue;
+    const gap=Math.max(a.lo,b.lo)-Math.min(a.hi,b.hi);
+    if(gap>0.8)continue;
+    if(Math.abs((a.c+a.s*thOf(w))-(b.c+b.s*thOf(v)))<0.35)facs.push({w,v,A:w.roomId,B:v.roomId,ax:a.ax,fac:1});
+  }
+  // kézi homlokzat-igazítások (elsőbbséget kapnak)
+  const pins=[];
+  (S.pins||[]).forEach(p=>{
+    const w=S.walls.find(x=>x.id===p.a),v=S.walls.find(x=>x.id===p.b);
+    if(!w||!v||w.roomId===v.roomId||!inf.has(w)||!inf.has(v))return;
+    const a=inf.get(w),b=inf.get(v);if(a.o!==b.o||a.s!==b.s)return;
+    pins.push({w,v,A:w.roomId,B:v.roomId,ax:a.ax,fac:1});
+  });
+  return {parts,facs,partOf,pins};
+}
+function relK(e){ // dB - dA, a jelenlegi (módosítás utáni) geometriából
+  const a=axInfo(e.w),b=axInfo(e.v);if(!a||!b)return null;
+  if(e.fac)return (a.c+a.s*thOf(e.w))-(b.c+a.s*thOf(e.v));
+  const t=Math.max(thOf(e.w),thOf(e.v)),g=(b.c-a.c)*a.s;
+  return (t-g)*a.s;
+}
+function solveRel(rel,fixed){
+  if(!S.rooms.length)return;
+  if(!fixed||!fixed.size)fixed=new Set([S.rooms[0].id]);
+  const all=(rel.pins||[]).concat(rel.parts,rel.facs).map(e=>({...e,k:relK(e)})).filter(e=>e.k!==null);
+  const shift={};S.rooms.forEach(r=>shift[r.id]={x:0,y:0});
+  ['x','y'].forEach(ax=>{
+    const par={};const find=x=>{while(par[x]!==undefined&&par[x]!==x)x=par[x];return x;};
+    fixed.forEach(id=>{par[id]='#F';});par['#F']='#F';
+    const adj={};
+    all.filter(e=>e.ax===ax).forEach(e=>{ // a válaszfalak előbb (a lista sorrendje), aztán homlokzatok
+      const ra=find(e.A),rb=find(e.B);if(ra===rb)return;
+      par[ra]=rb;
+      (adj[e.A]=adj[e.A]||[]).push({to:e.B,k:e.k});
+      (adj[e.B]=adj[e.B]||[]).push({to:e.A,k:-e.k});
+    });
+    const d={},q=[...fixed];fixed.forEach(id=>d[id]=0);
+    while(q.length){const id=q.shift();(adj[id]||[]).forEach(n=>{if(d[n.to]===undefined){d[n.to]=d[id]+n.k;q.push(n.to);}});}
+    Object.keys(d).forEach(id=>{if(shift[id])shift[id][ax]=d[id];});
+  });
+  S.walls.forEach(w=>{const sh=shift[w.roomId];if(!sh)return;
+    if(sh.x){w.x1=r3(w.x1+sh.x);w.x2=r3(w.x2+sh.x);}
+    if(sh.y){w.y1=r3(w.y1+sh.y);w.y2=r3(w.y2+sh.y);}
+  });
+}
+function joinOn(){return $('#chkJoin').checked;}
+// mutate(rel) a változtatás; fixed = helyben maradó helyiségek
+function relayout(mutate,fixed){
+  const rel=detectRel(true);
+  if(mutate)mutate(rel);
+  if(joinOn())solveRel(rel,fixed);
+  fitFlexRooms();
+}
+
+/* Kiadódó helyiség: nem mért, a falai a szomszédos helyiségek falaihoz / a homlokzat vonalához igazodnak,
+   így ebben a helyiségben gyűlnek össze az építési és mérési pontatlanságok. */
+function wGeo(w){const L=wLen(w)||1,u={x:(w.x2-w.x1)/L,y:(w.y2-w.y1)/L},s=roomSign(w.roomId);return {L,u,n:{x:-s*u.y,y:s*u.x}};}
+function lineInter(p1,d1,p2,d2){const c=d1.x*d2.y-d1.y*d2.x;if(Math.abs(c)<0.02)return null;const u=((p2.x-p1.x)*d2.y-(p2.y-p1.y)*d2.x)/c;return {x:p1.x+d1.x*u,y:p1.y+d1.y*u};}
+// közös fal-jelöltek egy fal külső oldalán (mért helyiségek falai), t = a célvonal távolsága a fal belső síkjától
+function flexPartCands(w,others){
+  const G=wGeo(w),out=[];
+  others.forEach(v=>{
+    const V=wGeo(v);
+    if(G.u.x*V.u.x+G.u.y*V.u.y>-0.985)return;
+    const g=(v.x1-w.x1)*G.n.x+(v.y1-w.y1)*G.n.y;
+    if(g<-0.6||g>thOf(v)+0.6)return;
+    const a=(v.x1-w.x1)*G.u.x+(v.y1-w.y1)*G.u.y,b=(v.x2-w.x1)*G.u.x+(v.y2-w.y1)*G.u.y;
+    const lo=Math.max(0,Math.min(a,b)),hi=Math.min(G.L,Math.max(a,b));
+    if(hi-lo<=0.2)return;
+    const tv=thOf(v),ox=v.x1+V.n.x*tv,oy=v.y1+V.n.y*tv;
+    out.push({v,V,lo,hi,ov:hi-lo,t:(ox-w.x1)*G.n.x+(oy-w.y1)*G.n.y,ox,oy});
+  });
+  return out.sort((a,b)=>(a.lo+a.hi)-(b.lo+b.hi));
+}
+// nyílászárók helyének mentése/visszaillesztése falbontás/összevonás körül
+function saveOps(rid){return S.openings.filter(o=>{const w=S.walls.find(x=>x.id===o.wallId);return w&&w.roomId===rid;}).map(o=>{const w=S.walls.find(x=>x.id===o.wallId);return {o,p:wPtAt(w,o.pos)};});}
+function restoreOps(rid,saved){
+  const ws=roomWalls(S.rooms.find(r=>r.id===rid));
+  saved.forEach(({o,p})=>{
+    let best=null,bd=Infinity,bt=0.5;
+    ws.forEach(w=>{const L=wLen(w);if(L<0.05)return;const q=ptSegDist(p.x,p.y,w.x1,w.y1,w.x2,w.y2);if(q.d<bd){bd=q.d;best=w;bt=q.t;}});
+    if(best){o.wallId=best.id;o.pos=Math.max(0.05,Math.min(0.95,bt));}
+  });
+}
+function fitFlexRooms(){
+  const flex=S.rooms.filter(r=>r.flex);if(!flex.length)return;
+  const flexIds=new Set(flex.map(r=>r.id));
+  const others=S.walls.filter(v=>!flexIds.has(v.roomId)&&!v.sag&&wLen(v)>0.05);
+  const relN=detectRel(true);
+  const lmF=roomLvlMap(),allOthers=others;
+  flex.forEach(R=>{
+    const others=allOthers.filter(v=>lmF.get(v.roomId)===lvlOf(R));
+    const ops=saveOps(R.id);
+    // 1) korábbi lépcsők visszaolvasztása
+    let ws=roomWalls(R),kept=[];
+    ws.forEach(w=>{
+      if(w.fstep){S.walls.splice(S.walls.indexOf(w),1);return;}
+      if(w.fc&&kept.length){const k=kept[kept.length-1];k.x2=w.x2;k.y2=w.y2;S.walls.splice(S.walls.indexOf(w),1);return;}
+      kept.push(w);
+    });
+    // 2) bontás ott, ahol egy oldal több, eltérő síkú szomszéd falhoz ér → lépcsős fal
+    kept.slice().forEach(w=>{
+      if(w.sag||wLen(w)<0.3)return;
+      const c=flexPartCands(w,others);if(c.length<2)return;
+      const G=wGeo(w),bs=[];
+      for(let i=0;i<c.length-1;i++){
+        if(Math.abs(c[i].t-c[i+1].t)<0.03)continue;
+        const b=Math.max(0.05,Math.min(G.L-0.05,(c[i].hi+c[i+1].lo)/2));
+        bs.push({b,n:{x:-c[i].V.u.y,y:c[i].V.u.x}});
+      }
+      if(!bs.length)return;
+      const P=b=>({x:w.x1+G.u.x*b,y:w.y1+G.u.y*b}),end={x:w.x2,y:w.y2},add=[];
+      let cur=P(bs[0].b);w.x2=cur.x;w.y2=cur.y;
+      bs.forEach((B,i)=>{
+        const p=P(B.b),nb=i+1<bs.length?P(bs[i+1].b):end;
+        add.push({id:uid(),roomId:R.id,x1:p.x,y1:p.y,x2:p.x,y2:p.y,th:0.01,mat:w.mat,eps:0,sag:0,fstep:1,sx:p.x,sy:p.y,sdx:B.n.x,sdy:B.n.y});
+        add.push({id:uid(),roomId:R.id,x1:p.x,y1:p.y,x2:nb.x,y2:nb.y,th:w.th,mat:w.mat,eps:w.eps||0,sag:0,fc:1});
+      });
+      S.walls.splice(S.walls.indexOf(w)+1,0,...add);
+    });
+    // 3) illesztés: minden fal a saját szomszédjához / a homlokzathoz
+    ws=roomWalls(R);if(ws.length<3)return;
+    const lines=ws.map(w=>{
+      if(w.fstep)return {p:{x:w.sx,y:w.sy},d:{x:w.sdx,y:w.sdy}};
+      if(w.sag||wLen(w)<0.05)return null;
+      const G=wGeo(w),th=thOf(w);
+      const pc=flexPartCands(w,others).sort((a,b)=>b.ov-a.ov)[0];
+      if(pc){
+        w.th=thOf(pc.v);if(!w.mat)w.mat=pc.v.mat||'';
+        return {p:{x:pc.ox,y:pc.oy},d:pc.V.u};
+      }
+      const cands=[];
+      others.forEach(v=>{
+        if(relN.partOf.has(v))return;
+        const V=wGeo(v);
+        if(G.n.x*V.n.x+G.n.y*V.n.y<0.985)return;
+        const tv=thOf(v);
+        const o1={x:v.x1+V.n.x*tv,y:v.y1+V.n.y*tv},o2={x:v.x2+V.n.x*tv,y:v.y2+V.n.y*tv};
+        const dist=((o1.x-w.x1)*G.n.x+(o1.y-w.y1)*G.n.y)-th;
+        if(Math.abs(dist)>0.6)return;
+        const a=(o1.x-w.x1)*G.u.x+(o1.y-w.y1)*G.u.y,b=(o2.x-w.x1)*G.u.x+(o2.y-w.y1)*G.u.y;
+        const lo=Math.min(a,b),hi=Math.max(a,b);
+        if(Math.max(lo-G.L,-hi,0)>1.2)return;
+        cands.push({o1,o2,a,b,lo,hi,V});
+      });
+      if(!cands.length)return null;
+      const before=cands.filter(c=>c.hi<=G.L*0.5).sort((x,y)=>y.hi-x.hi)[0];
+      const after=cands.filter(c=>c.lo>=G.L*0.5).sort((x,y)=>x.lo-y.lo)[0];
+      if(before&&after){
+        const pb=before.a>before.b?before.o1:before.o2,pa=after.a<after.b?after.o1:after.o2;
+        const dl=Math.hypot(pa.x-pb.x,pa.y-pb.y)||1,D={x:(pa.x-pb.x)/dl,y:(pa.y-pb.y)/dl};
+        let nn={x:-D.y,y:D.x};if(nn.x*G.n.x+nn.y*G.n.y<0)nn={x:-nn.x,y:-nn.y};
+        return {p:{x:pb.x-nn.x*th,y:pb.y-nn.y*th},d:D};
+      }
+      const c=before||after||cands[0];
+      return {p:{x:c.o1.x-G.n.x*th,y:c.o1.y-G.n.y*th},d:c.V.u};
+    });
+    const n=ws.length,L=lines.map((l,i)=>l||{p:{x:ws[i].x1,y:ws[i].y1},d:wGeo(ws[i]).u});
+    const verts=[];
+    for(let i=0;i<n;i++){const j=(i+1)%n;verts.push(lineInter(L[i].p,L[i].d,L[j].p,L[j].d)||{x:ws[i].x2,y:ws[i].y2});}
+    for(let i=0;i<n;i++){const j=(i+1)%n;ws[i].x2=r3(verts[i].x);ws[i].y2=r3(verts[i].y);ws[j].x1=r3(verts[i].x);ws[j].y1=r3(verts[i].y);}
+    restoreOps(R.id,ops);
+  });
+}
+// kijelölt külső falak külső síkja egy vonalba (a leghosszabb fal a viszonyítás); megjegyzi, későbbi illesztésnél is érvényes
+function alignFacades(ws){
+  const inf=ws.map(w=>({w,a:axInfo(w)}));
+  if(inf.some(x=>!x.a)){alert('Csak vízszintes vagy függőleges egyenes falak igazíthatók.');return false;}
+  const ref=inf.slice().sort((x,y)=>wLen(y.w)-wLen(x.w))[0];
+  if(inf.some(x=>x.a.o!==ref.a.o||x.a.s!==ref.a.s)){alert('A kijelölt falaknak ugyanarra kell nézniük (pl. mind a déli homlokzaton).');return false;}
+  const flex=new Set(S.rooms.filter(r=>r.flex).map(r=>r.id));
+  S.pins=(S.pins||[]).filter(p=>!inf.some(x=>x.w!==ref.w&&(p.a===x.w.id||p.b===x.w.id)));
+  inf.forEach(x=>{if(x.w.roomId!==ref.w.roomId&&!flex.has(x.w.roomId))S.pins.push({a:ref.w.id,b:x.w.id});});
+  solveRel(detectRel(true),new Set([ref.w.roomId]));
+  fitFlexRooms();
+  return true;
+}
+function partnersOf(w,rel){return rel.parts.filter(e=>e.w===w||e.v===w).map(e=>e.w===w?e.v:e.w);}
+
+/* Téglalap helyiségek, falhossz-módosítás */
+function roomWalls(r){return S.walls.filter(w=>w.roomId===r.id);}
+function isRectRoom(r){
+  const ws=roomWalls(r);
+  return ws.length===4&&ws.every(w=>axInfo(w));
+}
+function rectBox(r){
+  const ws=roomWalls(r);
+  const xs=ws.flatMap(w=>[w.x1,w.x2]),ys=ws.flatMap(w=>[w.y1,w.y2]);
+  return {x1:Math.min(...xs),x2:Math.max(...xs),y1:Math.min(...ys),y2:Math.max(...ys)};
+}
+// a helyiség egy oldalát (és a mögötte lévő csúcsokat) eltolja: "nyújtás" – a párhuzamos oldal azonosan változik
+function stretchRoom(r,ax,from,delta){
+  if(Math.abs(delta)<1e-6)return;
+  roomWalls(r).forEach(w=>{
+    if(ax==='x'){if(w.x1>=from-1e-4)w.x1=r3(w.x1+delta);if(w.x2>=from-1e-4)w.x2=r3(w.x2+delta);}
+    else{if(w.y1>=from-1e-4)w.y1=r3(w.y1+delta);if(w.y2>=from-1e-4)w.y2=r3(w.y2+delta);}
+  });
+}
+function resizeRect(r,W,H,fixed){
+  relayout(()=>{
+    const b=rectBox(r);
+    if(W>0.1)stretchRoom(r,'x',b.x2,W-(b.x2-b.x1));
+    if(H>0.1)stretchRoom(r,'y',b.y2,H-(b.y2-b.y1));
+  },fixed||new Set([r.id]));
+}
+function setWallLength(w,L){
+  if(!(L>0.05))return;
+  const r=S.rooms.find(x=>x.id===w.roomId);if(!r)return;
+  const a=axInfo(w),cur=wLen(w);
+  relayout(()=>{
+    if(a)stretchRoom(r,a.o==='h'?'x':'y',a.hi,L-cur);
+    else{
+      const nx=r3(w.x1+(w.x2-w.x1)/cur*L),ny=r3(w.y1+(w.y2-w.y1)/cur*L);
+      findMatchingPts(w.x2,w.y2).filter(m=>m.w.roomId===r.id).forEach(m=>{if(m.end===1){m.w.x1=nx;m.w.y1=ny;}else{m.w.x2=nx;m.w.y2=ny;}});
+    }
+  },new Set([r.id]));
+}
+// falvastagság módosítása: a belméret marad, a közös fal mindkét oldala azonos lesz
+function setWallsThickness(ws,th,eps,mat){
+  const fixed=new Set([ws[0].roomId]);
+  relayout(rel=>{
+    ws.forEach(w=>{
+      if(th>0)w.th=th;
+      if(eps!==undefined)w.eps=eps;
+      if(mat!==undefined)w.mat=mat;
+      if(th>0)partnersOf(w,rel).forEach(p=>{p.th=th;if(mat!==undefined)p.mat=mat;});
+    });
+  },fixed);
+}
+function exteriorWalls(){const rel=detectRel();return S.walls.filter(w=>!rel.partOf.has(w));}
+function roomNo(r){return (S_FULL||S).rooms.indexOf(r)+1;}
+
+/* ===== Szintek =====
+   Minden szint a vásznon egymás mellett; mindegyiknek van bázispontja. A referencia-szint külső kontúrja
+   a bázispontok szerint eltolva segédvonalként (és fogópontként) megjelenik az aktuális szinten. */
+let S_FULL=null; // nyomtatás alatt a teljes állapot (S ilyenkor csak az aktuális szint)
+const LEVEL_PRESETS=['Pince','Földszint','Emelet','2. emelet','Tetőtér','Padlástér'];
+function curLvl(){return S.levels.find(l=>l.id===S.curLevel)||S.levels[0];}
+function lvlOf(r){return (r&&r.level)||S.levels[0].id;}
+function lvlName(id){const l=S.levels.find(x=>x.id===id);return l?l.name:'';}
+function roomLvlMap(){const m=new Map();S.rooms.forEach(r=>m.set(r.id,lvlOf(r)));return m;}
+function levelWalls(lid){const ids=new Set(S.rooms.filter(r=>lvlOf(r)===lid).map(r=>r.id));return S.walls.filter(w=>ids.has(w.roomId));}
+function boundsOf(ws){
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  ws.forEach(w=>wallPoly(w).forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);}));
+  return isFinite(minX)?{minX,maxX,minY,maxY}:null;
+}
+function refLevel(){
+  if(S.levels.length<2)return null;
+  const cur=curLvl();
+  if(cur.ref==='none')return null;
+  let ref=S.levels.find(l=>l.id===cur.ref&&l.id!==cur.id);
+  if(!ref){const i=S.levels.indexOf(cur);ref=S.levels[i-1]||S.levels[i+1];}
+  return ref||null;
+}
+// a referencia-szint külső kontúrja az aktuális szint helyére eltolva
+function ghostLines(){
+  if(!$('#chkGhost')||!$('#chkGhost').checked)return [];
+  const ref=refLevel();if(!ref)return [];
+  const cur=curLvl(),dx=cur.bx-ref.bx,dy=cur.by-ref.by;
+  const ws=levelWalls(ref.id);if(!ws.length)return [];
+  const rel=detectRel();
+  return ws.filter(w=>!rel.partOf.has(w)&&!w.fstep).map(w=>offPts(w,x=>thOf(x)+(x.eps||0)).map(p=>({x:p.x+dx,y:p.y+dy})));
+}
+function levelState(lid){
+  const rooms=S.rooms.filter(r=>lvlOf(r)===lid),ids=new Set(rooms.map(r=>r.id));
+  const walls=S.walls.filter(w=>ids.has(w.roomId)),wids=new Set(walls.map(w=>w.id));
+  return {...S,rooms,walls,openings:S.openings.filter(o=>wids.has(o.wallId)),pins:(S.pins||[]).filter(p=>wids.has(p.a)&&wids.has(p.b))};
+}
+function withLevel(lid,fn){S_FULL=S;S=levelState(lid);try{return fn();}finally{S=S_FULL;S_FULL=null;}}
+function setLevel(id){if(S.curLevel===id)return;S.curLevel=id;draft=[];guides=[];updateLevelBtn();save();}
+function updateLevelBtn(){const b=$('#btnLevel');if(b)b.textContent=`Szint: ${curLvl().name} ▾`;}
+function setTool(t){
+  tool=t;draft=[];guides=[];hoverPt=null;cadPt=null;
+  $$('[data-tool]').forEach(x=>x.classList.toggle('active',x.dataset.tool===tool));
+  svg.style.cursor=tool==='select'?'default':tool==='pan'?'grab':'crosshair';render();
+}
+function fitTo(B){if(!B)return;view.x=B.minX-1.8;view.y=B.minY-1.8;view.w=Math.max(6,(B.maxX-B.minX)+3.6);render();}
+function fitLevel(){
+  let B=boundsOf(levelWalls(S.curLevel));
+  if(!B){const g=ghostLines().flat();if(g.length)B={minX:Math.min(...g.map(p=>p.x)),maxX:Math.max(...g.map(p=>p.x)),minY:Math.min(...g.map(p=>p.y)),maxY:Math.max(...g.map(p=>p.y))};}
+  if(!B){const c=curLvl();B={minX:c.bx-3,maxX:c.bx+9,minY:c.by-3,maxY:c.by+7};}
+  fitTo(B);
+}
+function addLevel(name){
+  const cur=curLvl(),all=bounds(),rb=boundsOf(levelWalls(cur.id));
+  const d=(all&&rb)?(all.maxX-rb.minX)+6:20;
+  const nl={id:uid(),name,bx:r2(cur.bx+d),by:cur.by,ref:cur.id,section:null};
+  S.levels.push(nl);S.curLevel=nl.id;updateLevelBtn();
+}
+function openLevelsModal(){
+  const m=$('#modal');
+  const rows=S.levels.map(l=>`<tr data-lid="${l.id}">
+      <td><input type="radio" name="curL" ${l.id===S.curLevel?'checked':''}></td>
+      <td><input data-k="name" value="${esc(l.name)}" style="width:110px"></td>
+      <td><select data-k="ref"><option value="">(előző szint)</option><option value="none" ${l.ref==='none'?'selected':''}>nincs</option>${S.levels.filter(x=>x.id!==l.id).map(x=>`<option value="${x.id}" ${l.ref===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
+      <td class="muted">${S.rooms.filter(r=>lvlOf(r)===l.id).length} hely.</td>
+      <td><button class="btn" data-a="base">Bázispont</button> <button class="btn" data-a="sec">Metszet${l.section?' ✓':''}</button> <button class="btn" data-a="go">Ugrás</button> ${S.levels.length>1?'<button class="btn dan" data-a="del">✕</button>':''}</td></tr>`).join('');
+  m.innerHTML=`<h3><span>Szintek</span><button class="btn" id="mClose">✕</button></h3>
+    <table style="width:100%"><tr><th></th><th>Név</th><th>Segédkontúr</th><th></th><th></th></tr>${rows}</table>
+    <div class="row" style="margin-top:10px"><label>Új szint</label><select id="lvNew">${LEVEL_PRESETS.map(n=>`<option>${n}</option>`).join('')}<option value="">Egyéb…</option></select><button class="btn pri" id="lvAdd">+ Hozzáadás</button></div>
+    <p class="muted">A szintek a vásznon egymás mellett vannak. A bázispont (pl. egy közös sarok vagy lépcső) köti össze őket: a segédkontúrként választott szint külső kontúrja ehhez igazítva, szaggatott vonallal és fogópontokkal jelenik meg az aktuális szinten.</p>`;
+  $('#modalWrap').classList.add('open');
+  const close=()=>{$('#modalWrap').classList.remove('open');render();panel();};
+  $('#mClose').onclick=close;
+  m.querySelectorAll('tr[data-lid]').forEach(tr=>{
+    const l=S.levels.find(x=>x.id===tr.dataset.lid);
+    tr.querySelector('input[type=radio]').onchange=()=>{setLevel(l.id);render();};
+    tr.querySelector('[data-k=name]').onchange=e=>{l.name=e.target.value.trim()||l.name;updateLevelBtn();save();};
+    tr.querySelector('[data-k=ref]').onchange=e=>{l.ref=e.target.value||null;save();};
+    tr.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
+      const a=b.dataset.a;
+      if(a==='base'){setLevel(l.id);close();fitLevel();setTool('base');showHint('Koppints a bázispontra (pl. közös sarok, lépcső, kémény) – a fogópontok működnek.');}
+      else if(a==='go'){setLevel(l.id);close();fitLevel();}
+      else if(a==='sec'){setLevel(l.id);openSectionModal();}
+      else if(a==='del'){
+        const n=S.rooms.filter(r=>lvlOf(r)===l.id).length;
+        if(!confirm(`„${l.name}” szint törlése${n?` (${n} helyiséggel együtt)`:''}?`))return;
+        snapshot();
+        const ids=new Set(S.rooms.filter(r=>lvlOf(r)===l.id).map(r=>r.id));
+        const wids=new Set(S.walls.filter(w=>ids.has(w.roomId)).map(w=>w.id));
+        S.rooms=S.rooms.filter(r=>!ids.has(r.id));S.walls=S.walls.filter(w=>!wids.has(w.id));S.openings=S.openings.filter(o=>!wids.has(o.wallId));
+        S.levels=S.levels.filter(x=>x.id!==l.id);S.levels.forEach(x=>{if(x.ref===l.id)x.ref=null;});
+        if(S.curLevel===l.id)S.curLevel=S.levels[0].id;
+        selWalls.clear();selRoom=null;selOp=null;save();updateLevelBtn();openLevelsModal();
+      }
+    });
+  });
+  $('#lvAdd').onclick=()=>{
+    let n=$('#lvNew').value;
+    if(!n)n=(prompt('Szint neve:')||'').trim();
+    if(!n)return;
+    snapshot();addLevel(n);save();close();fitLevel();
+  };
+}
+function showHint(t){const h=$('#badge');if(h){h.textContent=t;}}
+
+/* ===== Padlástér / tetőtér metszet =====
+   A metszet a szint teljes belső szélességén megy át (a rajz vízszintes vagy függőleges irányában).
+   Mért adatok: bal oldalfal (térdfal), bal tetőszakasz (ferde hossz), padlásfödém (vízszintes) szélessége,
+   jobb tetőszakasz, jobb oldalfal, belmagasság, teljes szélesség. A köztes falak a rajzból jönnek.
+   Számítás: teljes alapterület, 1,90 m feletti belmagasságú alapterület, térfogat. */
+const SEC_LIM=1.9;
+function secProfile(sec){
+  if(!sec)return null;
+  const n=v=>(v===''||v==null||!isFinite(+v))?null:+v;
+  const W=n(sec.W),H=n(sec.H);let hL=n(sec.hL),hR=n(sec.hR),sL=n(sec.sL),sR=n(sec.sR),c=n(sec.c);
+  if(!(W>0)||!(H>0))return {err:'Add meg a teljes szélességet és a belmagasságot.'};
+  if(sec.sym){if(hR==null)hR=hL;if(sR==null)sR=sL;}
+  if(hL==null)hL=0;if(hR==null)hR=0;
+  const warn=[];
+  const run=(s,h)=>{if(s==null)return null;const d=H-h;if(d<=0)return 0;if(s<d-1e-6){warn.push('Egy tetőszakasz rövidebb, mint a térdfal és a belmagasság különbsége.');return 0;}return Math.sqrt(s*s-d*d);};
+  let aL=run(sL,hL),aR=run(sR,hR);
+  if(aL==null&&aR==null){if(c==null){c=0;}aL=aR=(W-c)/2;}
+  else if(aL==null){if(c==null)c=0;aL=W-c-aR;}
+  else if(aR==null){if(c==null)c=0;aR=W-c-aL;}
+  else if(c==null){c=W-aL-aR;}
+  else{const diff=W-(aL+c+aR);if(Math.abs(diff)>0.05)warn.push(`A részméretek összege ${hu(Math.abs(diff),2)} m-rel ${diff>0?'kisebb':'nagyobb'} a teljes szélességnél – a jobb tetőszakasz igazítva.`);aR=W-aL-c;}
+  if(c<0){warn.push('A tetőszakaszok vízszintes vetülete nagyobb a teljes szélességnél (padlásfödém szélessége < 0) – ellenőrizd a méreteket.');c=0;aR=Math.max(0,W-aL);}
+  if(aR<0){aR=0;}
+  const pts=[{u:0,h:hL},{u:aL,h:H},{u:aL+c,h:H},{u:W,h:hR}];
+  return {W,H,hL,hR,aL,aR,c,pts,warn,axis:sec.axis||'x'};
+}
+function hAt(P,u){
+  if(!P||!P.pts||u<0||u>P.W)return 0;
+  const p=P.pts;
+  for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];if(u>=a.u-1e-9&&u<=b.u+1e-9){const d=b.u-a.u;return d<1e-9?Math.max(a.h,b.h):a.h+(b.h-a.h)*(u-a.u)/d;}}
+  return 0;
+}
+function zonesAbove(P,lim=SEC_LIM){
+  const z=[],p=P.pts;
+  for(let i=0;i<p.length-1;i++){
+    const a=p[i],b=p[i+1];if(b.u-a.u<1e-9)continue;
+    if(a.h>=lim&&b.h>=lim)z.push([a.u,b.u]);
+    else if(a.h>=lim||b.h>=lim){const x=a.u+(lim-a.h)*(b.u-a.u)/(b.h-a.h);z.push(a.h>=lim?[a.u,x]:[x,b.u]);}
+  }
+  const m=[];z.sort((x,y)=>x[0]-y[0]).forEach(s=>{if(m.length&&s[0]<=m[m.length-1][1]+1e-6)m[m.length-1][1]=Math.max(m[m.length-1][1],s[1]);else m.push(s.slice());});
+  return m;
+}
+function levelSec(lid){const l=S.levels.find(x=>x.id===lid);return l&&l.section?l:null;}
+function secOrigin(l){
+  const ws=levelWalls(l.id);if(!ws.length)return 0;
+  const ax=(l.section.axis||'x');
+  return Math.min(...ws.map(w=>ax==='x'?Math.min(w.x1,w.x2):Math.min(w.y1,w.y2)));
+}
+function planExtent(l,ax){
+  const ws=levelWalls(l.id);if(!ws.length)return null;
+  const v=ws.flatMap(w=>ax==='x'?[w.x1,w.x2]:[w.y1,w.y2]);
+  return Math.max(...v)-Math.min(...v);
+}
+function clipHalf(poly,ax,val,keepGreater){
+  const out=[],k=p=>ax==='x'?p.x:p.y,inside=p=>keepGreater?k(p)>=val:k(p)<=val;
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i],b=poly[(i+1)%poly.length],ia=inside(a),ib=inside(b);
+    if(ia)out.push(a);
+    if(ia!==ib){const t=(val-k(a))/(k(b)-k(a));out.push({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});}
+  }
+  return out;
+}
+function polyAreaAbs(p){let a=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];a+=p[i].x*q.y-q.x*p[i].y;}return Math.abs(a)/2;}
+function slabArea(poly,ax,lo,hi){return polyAreaAbs(clipHalf(clipHalf(poly,ax,lo,true),ax,hi,false));}
+const secCache=new Map();
+function roomSecCalc(r){
+  const l=levelSec(lvlOf(r));if(!l)return null;
+  const P=secProfile(l.section);if(!P||P.err)return null;
+  const poly=roomPoly(r);if(poly.length<3)return null;
+  const o=secOrigin(l),ax=P.axis;
+  const key=JSON.stringify([poly,l.section,o]);
+  if(secCache.has(key))return secCache.get(key);
+  const area=polyAreaAbs(poly);
+  const area19=zonesAbove(P).reduce((s,[a,b])=>s+slabArea(poly,ax,o+a,o+b),0);
+  const cs=poly.map(p=>ax==='x'?p.x:p.y),lo=Math.min(...cs),hi=Math.max(...cs),st=0.02;
+  let vol=0;for(let c=lo;c<hi;c+=st){const c2=Math.min(hi,c+st);vol+=slabArea(poly,ax,c,c2)*hAt(P,(c+c2)/2-o);}
+  const res={area,area19,vol,hAvg:area>0?vol/area:0};
+  if(secCache.size>500)secCache.clear();secCache.set(key,res);
+  return res;
+}
+// fal belmagassága metszetes szinten: a metszettel párhuzamos falnál az átlag, a merőlegesnél a helyi magasság
+function wallSecHeight(w){
+  const r=S.rooms.find(x=>x.id===w.roomId);const l=r&&levelSec(lvlOf(r));if(!l)return null;
+  const P=secProfile(l.section);if(!P||P.err)return null;
+  const o=secOrigin(l),ax=P.axis,a=(ax==='x'?w.x1:w.y1)-o,b=(ax==='x'?w.x2:w.y2)-o;
+  if(Math.abs(b-a)<0.02)return hAt(P,(a+b)/2);
+  let s=0;const n=40;for(let i=0;i<n;i++)s+=hAt(P,a+(b-a)*(i+0.5)/n);return s/n;
+}
+// metszet rajz (SVG szöveg) – képernyőn és nyomtatáson
+function sectionSvg(l,wpx,hpx,print){
+  const P=secProfile(l.section);if(!P||P.err)return `<div class="muted">${P&&P.err||''}</div>`;
+  const pad=0.9,W=P.W,H=Math.max(P.H,P.hL,P.hR,2);
+  const vb=`${-pad} ${-H-pad*0.8} ${W+pad*2} ${H+pad*1.8}`;
+  const fg=print?'#000':'#e2e8f0',mu=print?'#444':'#94a3b8',ac=print?'#b45309':'#fbbf24',fs=Math.max(0.17,W/34);
+  const y=h=>-h,poly=[{u:0,h:0},...P.pts,{u:W,h:0}];
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${wpx}" height="${hpx}" style="display:block">`;
+  s+=`<path d="M${poly.map(p=>p.u+','+y(p.h)).join(' L')} Z" fill="${print?'#f1f5f9':'#1e3a8a55'}" stroke="${fg}" stroke-width="${fs*0.18}"/>`;
+  // 1,90 m alatti rész jelölése
+  const z=zonesAbove(P);let prev=0;
+  const prof=poly.map(p=>({x:p.u,y:p.h}));
+  [...z,[W,W]].forEach(([a,b])=>{if(a-prev>0.01){const cp=clipHalf(clipHalf(prof,'x',prev,true),'x',a,false);if(cp.length>2)s+=`<path d="M${cp.map(p=>p.x+','+y(p.y)).join(' L')} Z" fill="${print?'#0000001a':'#ef444455'}"/>`;}prev=b;});
+  s+=`<line x1="0" y1="${-SEC_LIM}" x2="${W}" y2="${-SEC_LIM}" stroke="${ac}" stroke-width="${fs*0.12}" stroke-dasharray="${fs*0.6} ${fs*0.35}"/>`;
+  s+=`<text x="${W+0.08}" y="${-SEC_LIM+fs*0.35}" font-size="${fs*0.85}" fill="${ac}">1,90</text>`;
+  // köztes falak a rajzból
+  const o=secOrigin(l),ax=P.axis;
+  const iv=S.rooms.filter(r=>lvlOf(r)===l.id).map(r=>{const cs=roomPoly(r).map(p=>ax==='x'?p.x:p.y);return {r,a:Math.min(...cs)-o,b:Math.max(...cs)-o};}).sort((p,q)=>p.a-q.a);
+  for(let i=0;i<iv.length-1;i++){const a=iv[i].b,b=iv[i+1].a;if(b-a>0.01&&b-a<1){const hm=Math.min(hAt(P,a),hAt(P,b));s+=`<rect x="${a}" y="${-hm}" width="${b-a}" height="${hm}" fill="${print?'#bbb':'#64748b'}" stroke="${fg}" stroke-width="${fs*0.08}"/>`;}}
+  iv.forEach(({r,a,b})=>{s+=`<text x="${(a+b)/2}" y="${-0.35}" font-size="${fs}" text-anchor="middle" fill="${mu}">${roomNo(r)}.</text>`;});
+  const T=(x,yy,t,an='middle',rot=0)=>`<text x="${x}" y="${yy}" font-size="${fs}" text-anchor="${an}" fill="${fg}"${rot?` transform="rotate(${rot},${x},${yy})"`:''}>${t}</text>`;
+  s+=T(W/2,fs*1.5,`${hu(W,2,true)}`);
+  s+=T(-0.12,y(P.hL/2),hu(P.hL,2,true),'end');
+  s+=T(W+0.12,y(P.hR/2),hu(P.hR,2,true),'start');
+  if(P.c>0.05)s+=T(P.aL+P.c/2,y(P.H)-fs*0.5,`${hu(P.c,2,true)}`);
+  const sl=(a,b,len)=>{const mx=(a.u+b.u)/2,my=y((a.h+b.h)/2),ang=Math.atan2(-(b.h-a.h),b.u-a.u)*180/Math.PI;return T(mx,my-fs*0.4,hu(len,2,true),'middle',ang);};
+  if(P.aL>0.05)s+=sl(P.pts[0],P.pts[1],Math.hypot(P.aL,P.H-P.hL));
+  if(P.aR>0.05)s+=sl(P.pts[2],P.pts[3],Math.hypot(P.aR,P.H-P.hR));
+  s+=T(P.aL+P.c/2,y(P.H/2),`bm ${hu(P.H,2,true)}`);
+  s+='</svg>';
+  return s;
+}
+function secSummaryHtml(l){
+  const rs=S.rooms.filter(r=>lvlOf(r)===l.id).map(r=>({r,c:roomSecCalc(r)})).filter(x=>x.c);
+  if(!rs.length)return '';
+  const tA=rs.reduce((s,x)=>s+x.c.area,0),t19=rs.reduce((s,x)=>s+x.c.area19,0);
+  return `<table class="sectab"><tr><th>Helyiség</th><th>Teljes m²</th><th>≥1,90 m m²</th></tr>${rs.map(x=>`<tr><td>${roomNo(x.r)}. ${esc(x.r.name)}</td><td>${hu(x.c.area,2,true)}</td><td>${hu(x.c.area19,2,true)}</td></tr>`).join('')}<tr><td><b>Összesen</b></td><td><b>${hu(tA,2,true)}</b></td><td><b>${hu(t19,2,true)}</b></td></tr></table>`;
+}
+function openSectionModal(){
+  const l=curLvl();
+  const sec=l.section?{...l.section}:{axis:'x',W:'',hL:'',sL:'',c:'',sR:'',hR:'',H:'',sym:false};
+  const m=$('#modal');m.classList.add('wide');
+  const f=(k,lab,tip)=>`<div class="row"><label title="${tip||''}">${lab}</label><input id="sc_${k}" data-disto type="number" step="0.01" inputmode="decimal" value="${sec[k]??''}" placeholder="—"></div>`;
+  m.innerHTML=`<h3><span>Padlástér metszet – ${esc(l.name)}</span><button class="btn" id="mClose">✕</button></h3>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+    <div style="min-width:280px;flex:1">
+      <div class="row"><label>Metszet iránya</label><select id="sc_axis"><option value="x" ${sec.axis==='x'?'selected':''}>vízszintes ↔ (rajzon balról jobbra)</option><option value="y" ${sec.axis==='y'?'selected':''}>függőleges ↕ (fentről lefelé)</option></select></div>
+      <div class="row"><label>Teljes szélesség (m)</label><input id="sc_W" data-disto type="number" step="0.01" inputmode="decimal" value="${sec.W??''}" placeholder="—"><button class="btn" id="scFromPlan" title="A rajz belső szélességéből (köztes falakkal együtt)">rajzból</button></div>
+      ${f('hL','Bal oldalfal (m)','térdfal magassága')}
+      ${f('sL','Bal tető (m)','ferde hossz a térdfal tetejétől a padlásfödémig')}
+      ${f('c','Padlásfödém (m)','vízszintes (kakasülő) szakasz szélessége; üresen hagyva számolja')}
+      ${f('sR','Jobb tető (m)','ferde hossz; üresen hagyva számolja')}
+      ${f('hR','Jobb oldalfal (m)','térdfal magassága')}
+      ${f('H','Belmagasság (m)','padlótól a padlásfödémig')}
+      <div class="row"><label>Szimmetrikus</label><label class="chk"><input id="sc_sym" type="checkbox" ${sec.sym?'checked':''}> a jobb oldal = bal oldal</label></div>
+      <p class="muted">Köztes falak: a rajzolt helyiségekből. Bármelyik mezőbe mérhetsz DISTO-val (🔴 Mérés).</p>
+    </div>
+    <div style="flex:1.3;min-width:320px"><div id="scPrev"></div><div id="scWarn" style="color:#fbbf24;font-size:12px"></div><div id="scSum"></div></div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      ${l.section?'<button class="btn dan" id="scDel">Metszet törlése</button>':''}
+      <button class="btn" id="scMeas">🔴 Mérés</button><button class="btn" id="mCancel">Mégse</button><button class="btn pri" id="mOk">Mentés</button>
+    </div>`;
+  $('#modalWrap').classList.add('open');
+  const close=()=>{$('#modalWrap').classList.remove('open');m.classList.remove('wide');render();panel();};
+  const read=()=>{const s={axis:$('#sc_axis').value,sym:$('#sc_sym').checked};['W','hL','sL','c','sR','hR','H'].forEach(k=>{const v=$('#sc_'+k).value;s[k]=v===''?'':parseFloat(v);});return s;};
+  const prev=()=>{
+    const s=read(),old=l.section;l.section=s;secCache.clear();
+    const P=secProfile(s);
+    $('#scPrev').innerHTML=sectionSvg(l,'100%',220,false);
+    $('#scWarn').innerHTML=P&&P.warn?P.warn.map(esc).join('<br>'):'';
+    $('#scSum').innerHTML=(P&&!P.err)?secSummaryHtml(l)+(()=>{const pe=planExtent(l,s.axis);return pe&&s.W&&Math.abs(pe-s.W)>0.05?`<p style="color:#fbbf24;font-size:12px">A rajz szerinti szélesség ${hu(pe,2,true)} m, a mért ${hu(+s.W,2,true)} m.</p>`:'';})():'';
+    l.section=old;
+  };
+  m.querySelectorAll('input,select').forEach(i=>{i.addEventListener('input',prev);i.addEventListener('change',prev);});
+  $('#scFromPlan').onclick=()=>{const pe=planExtent(l,$('#sc_axis').value);if(pe){$('#sc_W').value=r2(pe);prev();}else alert('Ezen a szinten még nincs helyiség.');};
+  $('#mClose').onclick=$('#mCancel').onclick=close;
+  $('#scMeas').onclick=()=>{if(!curTarget()||!curTarget().id.startsWith('sc_'))lastDistoId='sc_W';startMeasure();};
+  if($('#scDel'))$('#scDel').onclick=()=>{if(confirm('Metszet törlése?')){snapshot();l.section=null;save();close();}};
+  $('#mOk').onclick=()=>{snapshot();l.section=read();secCache.clear();save();close();};
+  prev();
+}
+
+/* Snap & CAD */
+function clientToWorld(cx,cy){
+  const rect=svg.getBoundingClientRect();
+  const nx=(cx-rect.left)/(rect.width||1);
+  const ny=(cy-rect.top)/(rect.height||1);
+  return {x:view.x+nx*view.w,y:view.y+ny*view.h};
+}
+function fitViewToAspect(){
+  const rect=svg.getBoundingClientRect();
+  if(!rect.width||!rect.height)return;
+  const asp=rect.width/rect.height;
+  view.h=view.w/asp;
+}
+function snapPt(raw,lastPt){
+  guides=[];cadPt=null;
+  let x=raw.x,y=raw.y;
+  const useGrid=$('#chkGrid').checked;
+  const step=parseFloat($('#gridStep').value)||0.1;
+  const useCad=$('#chkCad').checked;
+  const tol=view.w*0.018;
+
+  if(useCad){
+    const pts=[];
+    S.walls.forEach(w=>{
+      pts.push({x:w.x1,y:w.y1},{x:w.x2,y:w.y2});
+      // falak külső sarkai is fogópontok → a szomszéd helyiség pontosan a fal túloldalára illeszthető
+      const o=offPts(w,thOf);pts.push(o[0],o[o.length-1]);
+    });
+    ghostLines().forEach(pl=>pl.forEach(p=>pts.push(p))); // másik szint kontúrja is fogópont
+    draft.forEach(p=>pts.push(p));
+    let bestV=tol,bestX=null,bestY=null,bestXSrc=null,bestYSrc=null;
+    // endpoint snap
+    for(const p of pts){
+      if(Math.hypot(p.x-raw.x,p.y-raw.y)<tol){
+        x=p.x;y=p.y;cadPt={x,y};
+        return {x:r3(x),y:r3(y)};
+      }
+    }
+    // ortho alignment from existing vertices
+    for(const p of pts){
+      if(Math.abs(p.x-raw.x)<bestV){bestV=Math.abs(p.x-raw.x);bestX=p.x;bestXSrc=p;}
+    }
+    bestV=tol;
+    for(const p of pts){
+      if(Math.abs(p.y-raw.y)<bestV){bestV=Math.abs(p.y-raw.y);bestY=p.y;bestYSrc=p;}
+    }
+    if(bestX!==null){x=bestX;guides.push({x1:bestX,y1:bestXSrc.y,x2:bestX,y2:raw.y,c:'#22c55e'});}
+    if(bestY!==null){y=bestY;guides.push({x1:bestYSrc.x,y1:bestY,x2:raw.x,y2:bestY,c:'#22c55e'});}
+    if(bestX!==null&&bestY!==null)cadPt={x,y};
+    if(lastPt){
+      if(Math.abs(raw.x-lastPt.x)<tol){x=lastPt.x;guides.push({x1:lastPt.x,y1:lastPt.y,x2:x,y2:raw.y,c:'#a855f7'});}
+      if(Math.abs(raw.y-lastPt.y)<tol){y=lastPt.y;guides.push({x1:lastPt.x,y1:lastPt.y,x2:raw.x,y2:y,c:'#a855f7'});}
+    }
+  }
+  if(useGrid){
+    if(guides.length===0){
+      x=Math.round(x/step)*step;
+      y=Math.round(y/step)*step;
+    }else{
+      if(!guides.some(g=>g.x1===g.x2))x=Math.round(x/step)*step;
+      if(!guides.some(g=>g.y1===g.y2))y=Math.round(y/step)*step;
+    }
+  }
+  return {x:r3(x),y:r3(y)};
+}
+
+/* Create Rooms */
+function newRoom(){
+  const rid=uid(),num=S.rooms.length+1;
+  S.rooms.push({id:rid,name:`Helyiség ${num}`,type:'Fűtött',height:null,floor:'',slab:'',sys:{heat:'',dhw:'',light:'',ren:''},level:S.curLevel});
+  return rid;
+}
+// új helyiség illesztése a meglévőkhöz (a meglévők helyben maradnak, a közös fal vastagságát átveszi)
+function placeNewRoom(rid){
+  const lv=lvlOf(S.rooms.find(r=>r.id===rid));
+  const others=new Set(S.rooms.filter(r=>r.id!==rid&&lvlOf(r)===lv).map(r=>r.id));
+  if(!others.size)return;
+  relayout(rel=>{
+    rel.parts.forEach(e=>{
+      const [mine,other]=e.w.roomId===rid?[e.w,e.v]:e.v.roomId===rid?[e.v,e.w]:[null,null];
+      if(mine&&!others.has(mine.roomId)&&others.has(other.roomId)){mine.th=thOf(other);if(!mine.mat)mine.mat=other.mat||'';}
+    });
+  },others);
+}
+function addRectRoom(p1,p2){
+  const x1=Math.min(p1.x,p2.x),x2=Math.max(p1.x,p2.x);
+  const y1=Math.min(p1.y,p2.y),y2=Math.max(p1.y,p2.y);
+  if(x2-x1<0.3||y2-y1<0.3)return;
+  snapshot();
+  const rid=newRoom();
+  const th=S.b.defTh||0.12;
+  const pts=[[x1,y1,x2,y1],[x2,y1,x2,y2],[x2,y2,x1,y2],[x1,y2,x1,y1]];
+  pts.forEach(a=>S.walls.push({id:uid(),roomId:rid,x1:a[0],y1:a[1],x2:a[2],y2:a[3],th,mat:'',eps:0,sag:0}));
+  placeNewRoom(rid);
+  selRoom=rid;selWalls.clear();selOp=null;
+  save();render();panel();
+  openRectModal(S.rooms.find(r=>r.id===rid),true);
+}
+function addPolyRoom(pts){
+  if(pts.length<3)return;
+  snapshot();
+  const rid=newRoom();
+  const th=S.b.defTh||0.12;
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i],b=pts[(i+1)%pts.length];
+    if(Math.hypot(b.x-a.x,b.y-a.y)>0.05){
+      S.walls.push({id:uid(),roomId:rid,x1:a.x,y1:a.y,x2:b.x,y2:b.y,th,mat:'',eps:0,sag:0});
+    }
+  }
+  placeNewRoom(rid);
+  selRoom=rid;selWalls.clear();selOp=null;
+  save();render();panel();
+}
+const ROOM_NAMES=FUNCS.map(v=>v.charAt(0).toUpperCase()+v.slice(1));
+// gyors méretablak téglalap helyiséghez (belméret); DISTO mérés az aktív mezőbe kerül
+function openRectModal(r,isNew){
+  if(!r)return;
+  const b=rectBox(r);
+  const m=$('#modal');
+  m.innerHTML=`<h3><span>${isNew?'Új helyiség – belméretek':'Helyiség belméretei'}</span><button class="btn" id="mClose">✕</button></h3>
+    <div class="row"><label>Név</label><input id="rmName" list="dl_rname" value="${esc(r.name)}"><datalist id="dl_rname">${ROOM_NAMES.map(n=>`<option value="${n}">`).join('')}</datalist></div>
+    <div class="row"><label>Vízszintes ↔ (m)</label><input id="rmW" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.x2-b.x1)}"></div>
+    <div class="row"><label>Függőleges ↕ (m)</label><input id="rmH" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.y2-b.y1)}"></div>
+    <p class="muted">${distoChar?'DISTO csatlakoztatva: a mérés az aktív mezőbe kerül, majd a következőre lép.':'Tipp: DISTO gombbal Bluetooth-on is jöhet a mérés.'}</p>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn" id="mMeas">🔴 Mérés</button>
+      <button class="btn" id="mCancel">${isNew?'Hozzávetőleges marad':'Mégse'}</button>
+      <button class="btn pri" id="mOk">Rendben</button>
+    </div>`;
+  $('#modalWrap').classList.add('open');
+  const close=()=>$('#modalWrap').classList.remove('open');
+  $('#mClose').onclick=$('#mCancel').onclick=close;
+  $('#mMeas').onclick=()=>{lastDistoId='rmW';startMeasure();};
+  setTimeout(()=>{const i=$('#rmW');i.focus();i.select();},50);
+  $('#rmH').addEventListener('keydown',e=>{if(e.key==='Enter')$('#mOk').click();});
+  $('#rmW').addEventListener('keydown',e=>{if(e.key==='Enter'){$('#rmH').focus();$('#rmH').select();}});
+  $('#mOk').onclick=()=>{
+    if(!isNew)snapshot();
+    r.name=$('#rmName').value.trim()||r.name;{const f=FUNCS.find(x=>x.toLowerCase()===r.name.toLowerCase());if(f)r.func=f;}
+    const W=parseFloat($('#rmW').value),H=parseFloat($('#rmH').value);
+    const fixed=isNew?new Set(S.rooms.filter(x=>x.id!==r.id).map(x=>x.id)):new Set([r.id]);
+    resizeRect(r,W,H,fixed.size?fixed:new Set([r.id]));
+    close();save();render();panel();
+  };
+}
+
+/* Connected vertices helper (stretching walls) */
+function findMatchingPts(x,y,tol=0.02){
+  const list=[];
+  S.walls.forEach(w=>{
+    if(Math.hypot(w.x1-x,w.y1-y)<tol)list.push({w,end:1});
+    if(Math.hypot(w.x2-x,w.y2-y)<tol)list.push({w,end:2});
+  });
+  return list;
+}
+
+/* SVG Render */
+function el(tag,attrs,parent){
+  const n=document.createElementNS(NS,tag);
+  for(const k in attrs)n.setAttribute(k,attrs[k]);
+  if(parent)parent.appendChild(n);
+  return n;
+}
+/* Falsraffozás: azonos anyag = azonos minta (a vastagságtól független) */
+const HATCH_STYLES=['diag45','diag135','cross','dots','grid','horiz','vert','dense','conc'];
+function matKey(w){return (w.mat||'').trim().toLowerCase();}
+function matStyles(){
+  const m=new Map(),used=new Set();
+  const kw=k=>/válaszfal/.test(k)?'diag135':/tégl|porotherm|kisméret|b ?30|b ?38/.test(k)?'diag45':/vasbeton|beton|\bvb\b/.test(k)?'conc':/kő|termés/.test(k)?'cross':/ytong|gázbeton|pórus/.test(k)?'grid':/vályog|vert|döngölt/.test(k)?'horiz':/könnyű|gipsz|szendvics|\bfa\b/.test(k)?'vert':/panel/.test(k)?'dense':null;
+  const keys=[...new Set(S.walls.map(matKey))];
+  keys.forEach(k=>{if(!k){m.set(k,'solid');return;}const st=kw(k);if(st&&!used.has(st)){m.set(k,st);used.add(st);}});
+  keys.forEach(k=>{if(m.has(k))return;const st=HATCH_STYLES.find(x=>!used.has(x))||'diag45';m.set(k,st);used.add(st);});
+  return m;
+}
+function matPatterns(defs,isPrint,px,pre){
+  const st=matStyles(),ids=new Map(),s=0.16;
+  const bg=isPrint?'#fff':'#475569',ln=isPrint?'#000':'#cbd5e1',lw=isPrint?0.011:Math.max(0.01,px*0.9);
+  const d45=`M0,${s} L${s},0 M${-s/2},${s/2} L${s/2},${-s/2} M${s/2},${s*1.5} L${s*1.5},${s/2}`;
+  const d135=`M0,0 L${s},${s} M${-s/2},${s/2} L${s/2},${s*1.5} M${s/2},${-s/2} L${s*1.5},${s/2}`;
+  let i=0;
+  st.forEach((style,k)=>{
+    const id=`${pre}mat${i++}`;ids.set(k,id);
+    const sz=style==='dense'?s/2:s;
+    const p=el('pattern',{id,width:sz,height:sz,patternUnits:'userSpaceOnUse'},defs);
+    el('rect',{x:0,y:0,width:sz,height:sz,fill:style==='solid'?(isPrint?'#d4d4d4':'#64748b'):bg},p);
+    const L=d=>el('path',{d,stroke:ln,'stroke-width':lw,fill:'none'},p);
+    const D=()=>el('circle',{cx:sz/2,cy:sz/2,r:sz*0.12,fill:ln},p);
+    if(style==='diag45')L(d45);
+    else if(style==='diag135')L(d135);
+    else if(style==='cross'){L(d45);L(d135);}
+    else if(style==='dots')D();
+    else if(style==='grid')L(`M0,${sz/2} L${sz},${sz/2} M${sz/2},0 L${sz/2},${sz}`);
+    else if(style==='horiz')L(`M0,${sz/2} L${sz},${sz/2}`);
+    else if(style==='vert')L(`M${sz/2},0 L${sz/2},${sz}`);
+    else if(style==='dense')L(`M0,${sz} L${sz},0 M${-sz/2},${sz/2} L${sz/2},${-sz/2} M${sz/2},${sz*1.5} L${sz*1.5},${sz/2}`);
+    else if(style==='conc'){L(d45);el('circle',{cx:s*0.25,cy:s*0.25,r:s*0.07,fill:ln},p);}
+  });
+  return ids;
+}
+// jelmagyarázat a nyomtatáshoz (a nyomtatási rajz mintáira hivatkozik)
+function hatchLegend(){
+  const st=matStyles();if(!st.size)return '';
+  const ids=[...st.keys()];
+  return ids.map((k,i)=>{
+    const w=S.walls.find(x=>matKey(x)===k);
+    return `<span style="display:inline-flex;align-items:center;gap:1mm;margin-right:3mm"><svg width="7mm" height="3.2mm" viewBox="0 0 0.7 0.32"><rect x="0.005" y="0.005" width="0.69" height="0.31" fill="url(#ppmat${i})" stroke="#000" stroke-width="0.012"/></svg>${esc((w&&w.mat)||'anyag n.a.')}</span>`;
+  }).join('');
+}
+
+function render(targetSvg=svg,isPrint=false){
+  if(!isPrint)fitViewToAspect();
+  targetSvg.innerHTML='';
+  if(!isPrint)targetSvg.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
+
+  const defs=el('defs',{},targetSvg);
+  // Basement crosshatch pattern
+  const pre=isPrint?'pp':'ps'; // külön azonosítók a képernyő és a nyomtatás rajzához
+  const pat=el('pattern',{id:pre+'pince',width:'0.45',height:'0.45',patternUnits:'userSpaceOnUse'},defs);
+  el('path',{d:'M0,0 L0.45,0.45 M0.45,0 L0,0.45',stroke:isPrint?'#666':'#94a3b8','stroke-width':isPrint?'0.015':'0.018',opacity:isPrint?'0.35':'0.28'},pat);
+
+  const px=isPrint?0.02:view.w/(svg.getBoundingClientRect().width||800);
+
+  // Grid
+  if(!isPrint && $('#chkGrid').checked){
+    const gG=el('g',{},targetSvg);
+    const step=parseFloat($('#gridStep').value)||0.1;
+    const x0=Math.floor(view.x/step)*step,x1=view.x+view.w;
+    const y0=Math.floor(view.y/step)*step,y1=view.y+view.h;
+    if((x1-x0)/step<260){
+      for(let x=x0;x<=x1;x+=step){
+        const maj=Math.abs(Math.round(x)-x)<1e-4;
+        el('line',{x1:x,y1:view.y,x2:x,y2:y1,stroke:maj?'#32363d':'#24272c','stroke-width':maj?px*1.2:px*0.7},gG);
+      }
+      for(let y=y0;y<=y1;y+=step){
+        const maj=Math.abs(Math.round(y)-y)<1e-4;
+        el('line',{x1:view.x,y1:y,x2:x1,y2:y,stroke:maj?'#32363d':'#24272c','stroke-width':maj?px*1.2:px*0.7},gG);
+      }
+    }
+  }
+
+  // Rooms fill & labels
+  const rel=detectRel();
+  const slabsDiffer=new Set(S.rooms.map(r=>r.slab||'')).size>1;
+  const gR=el('g',{},targetSvg);
+  S.rooms.forEach(r=>{
+    const pts=roomPoly(r);
+    if(pts.length<3)return;
+    const d=pts.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ')+' Z';
+    const isSel=r.id===selRoom&&!isPrint;
+    const isPince=(r.floor==='pince'||r.type==='Pince');
+    el('path',{d,fill:isPince?`url(#${pre}pince)`:(isPrint?'#f8fafc':(isSel?'#1e3a8a44':'#2563eb1a')),stroke:'none'},gR);
+    const c=roomCenter(r),area=roomArea(r);
+    const fs=isPrint?0.24:Math.max(0.16,Math.min(0.28,px*13));
+    const lines=[{t:`${roomNo(r)}. ${r.name}`,f:1,w:'600',c:isPrint?'#000':'#e2e8f0'},{t:`${hu(area,2,true)} m²`,f:0.88,c:isPrint?'#333':'#93c5fd'}];
+    // padló mindig; födém csak ha nem mindenhol azonos
+    const meta=[r.floor,slabsDiffer?r.slab:''].filter(Boolean).join(' · ');
+    if(meta)lines.push({t:meta,f:0.75,c:isPrint?'#444':'#cbd5e1'});
+    if(r.flex)lines.push({t:'(kiadódó)',f:0.7,c:isPrint?'#444':'#c4b5fd'});
+    const sc=roomSecCalc(r);
+    if(sc)lines.push({t:`≥1,90 m: ${hu(sc.area19,2,true)} m²`,f:0.82,w:'600',c:isPrint?'#000':'#fbbf24'});
+    if(r.height&&Math.abs(r.height-S.b.bm)>1e-6)lines.push({t:`bm ${hu(r.height)}`,f:0.78,w:'600',c:isPrint?'#000':'#fcd34d'});
+    if(!isPrint){
+      const sys=SYS_KEYS.map(k=>getV(r,k)).filter(Boolean).join(' · ');
+      if(sys)lines.push({t:sys,f:0.68,c:'#86efac'});
+    }
+    const lh=fs*1.05;let y=c.y-(lines.length-1)*lh/2+fs*0.3;
+    lines.forEach(L=>{
+      const t=el('text',{x:c.x,y,'text-anchor':'middle',fill:L.c,'font-size':fs*L.f,'font-weight':L.w||'400'},gR);
+      t.textContent=L.t;y+=lh;
+    });
+  });
+
+  // Walls: a rajzolt vonal a belső falsík, a vastagság kifelé épül.
+  // Sraffozás anyagonként (vastagságtól független); a körvonal a falak alá rajzolva → a falak között nincs varrat,
+  // csak a falazat külső/belső síkja látszik vonalként.
+  const pats=matPatterns(defs,isPrint,px,pre);
+  const gWO=el('g',{},targetSvg),gWF=el('g',{},targetSvg),gWS=el('g',{},targetSvg);
+  S.walls.forEach(w=>{
+    const sel=selWalls.has(w.id)&&!isPrint;
+    const s=roomSign(w.roomId);
+    const poly=wallPoly(w);
+    const d='M'+poly.map(p=>p.x+','+p.y).join(' L')+' Z';
+    el('path',{d,fill:'none',stroke:isPrint?'#000':'#e2e8f0','stroke-width':isPrint?0.03:px*2.4,'stroke-linejoin':'miter'},gWO);
+    el('path',{d,fill:`url(#${pats.get(matKey(w))})`},gWF);
+    if(w.eps>0){
+      const a=offPts(w,thOf,s),b=offPts(w,x=>thOf(x)+(x.eps||0),s);
+      const de='M'+a.concat(b.reverse()).map(p=>p.x+','+p.y).join(' L')+' Z';
+      el('path',{d:de,fill:isPrint?'#fff':'#f59e0b33',stroke:isPrint?'#000':'#f59e0b','stroke-width':isPrint?0.01:px*1,'stroke-dasharray':isPrint?'0.06 0.04':'0.12 0.08'},gWS);
+    }
+    if(sel){
+      el('path',{d,fill:'#3b82f6aa',stroke:'#bfdbfe','stroke-width':px*1.2},gWS);
+      const mid=wPtAt(w,0.5);
+      el('circle',{cx:w.x1,cy:w.y1,r:px*5.5,fill:'#3b82f6',stroke:'#fff','stroke-width':px*1.5},gWS);
+      el('circle',{cx:w.x2,cy:w.y2,r:px*5.5,fill:'#3b82f6',stroke:'#fff','stroke-width':px*1.5},gWS);
+      el('circle',{cx:mid.x,cy:mid.y,r:px*5,fill:'#f59e0b',stroke:'#fff','stroke-width':px*1.5},gWS);
+    }
+  });
+
+  // Openings
+  const gO=el('g',{},targetSvg);
+  S.openings.forEach(o=>{
+    const w=S.walls.find(x=>x.id===o.wallId);
+    if(!w)return;
+    const th=thOf(w);
+    const sel=(o.id===selOp)&&!isPrint;
+    const fs=isPrint?0.17:Math.max(0.13,px*10);
+    opTs(o,w).forEach(t=>{
+      const P=opPlace(o,w,t),ang=Math.atan2(P.T.ty,P.T.tx)*180/Math.PI;
+      const grp=el('g',{transform:`translate(${P.x},${P.y}) rotate(${ang})`},gO);
+      const hw=o.ow/2,ext=isPrint?0.025:px*1.6;
+      // a fal körvonalát és sraffozását a nyílásban eltakarja
+      el('rect',{x:-hw,y:-th/2-ext,width:o.ow,height:th+ext*2,fill:isPrint?'#fff':'#172036'},grp);
+      if(o.type==='Ablak'){
+        el('rect',{x:-hw,y:-th/2,width:o.ow,height:th,fill:isPrint?'#fff':'#0f172a',stroke:sel?'#f59e0b':(isPrint?'#000':'#38bdf8'),'stroke-width':isPrint?0.012:px*1.6},grp);
+        el('line',{x1:-hw,y1:0,x2:hw,y2:0,stroke:sel?'#f59e0b':(isPrint?'#000':'#38bdf8'),'stroke-width':isPrint?0.012:px*1.4},grp);
+      }else{
+        el('rect',{x:-hw,y:-th/2,width:o.ow,height:th,fill:isPrint?'#fff':'#1d1f22',stroke:sel?'#f59e0b':(isPrint?'#000':'#fbbf24'),'stroke-width':isPrint?0.012:px*1.2},grp);
+        const dir=o.dir||0; // 0..3; 0 = a helyiség felé nyílik
+        const sx=(dir===1||dir===2)?-1:1;
+        const sy=((dir===2||dir===3)?-1:1)*(-P.s);
+        const hx=-hw*sx,hy=(th/2)*sy;
+        const ex=hx,ey=hy+o.ow*sy;
+        const tx=hx+o.ow*sx,ty=hy;
+        const dc=sel?'#f59e0b':(isPrint?'#000':'#fbbf24');
+        el('line',{x1:hx,y1:hy,x2:ex,y2:ey,stroke:dc,'stroke-width':isPrint?0.015:px*1.8},grp);
+        el('path',{d:`M${ex},${ey} A${o.ow},${o.ow} 0 0 ${(sx*sy>0?0:1)} ${tx},${ty}`,fill:'none',stroke:dc,'stroke-width':isPrint?0.01:px*1.1,'stroke-dasharray':'0.06 0.05'},grp);
+      }
+      // felirat a fal külső oldalán, mindig olvasható irányban
+      const lbl=o.sh>0?`${hu(o.ow)}+${hu(o.sh)}/${hu(o.oh)}`:`${hu(o.ow)}/${hu(o.oh)}`;
+      const off=th/2+fs*0.75;
+      const lx=P.x+P.s*P.T.nx*off,ly=P.y+P.s*P.T.ny*off;
+      let rot=ang;if(rot>90)rot-=180;if(rot<-90)rot+=180;
+      const txEl=el('text',{x:lx,y:ly,'text-anchor':'middle','dominant-baseline':'central',fill:isPrint?'#000':'#bae6fd','font-size':fs,transform:`rotate(${rot},${lx},${ly})`},gO);
+      txEl.textContent=lbl;
+    });
+  });
+
+  // Padlástér: az 1,90 m-es belmagasság határvonalai a rajzon
+  S.levels.forEach(l=>{
+    if(!l.section)return;
+    const P=secProfile(l.section);if(!P||P.err)return;
+    const B=boundsOf(levelWalls(l.id));if(!B)return;
+    const o=secOrigin(l),ax=P.axis,gS=el('g',{},targetSvg),col=isPrint?'#b45309':'#fbbf24';
+    const lw=isPrint?0.02:px*1.8,fs=isPrint?0.17:Math.max(0.13,px*10);
+    // a rajzon a helyiségek belső része a vonal mentén
+    zonesAbove(P).flat().forEach(u=>{
+      if(u<0.02||u>P.W-0.02)return;
+      const c=o+u;
+      const [x1,y1,x2,y2]=ax==='x'?[c,B.minY,c,B.maxY]:[B.minX,c,B.maxX,c];
+      el('line',{x1,y1,x2,y2,stroke:col,'stroke-width':lw,'stroke-dasharray':isPrint?'0.12 0.07':`${px*8} ${px*5}`},gS);
+      const tx=ax==='x'?c+fs*0.3:B.minX+0.1,ty=ax==='x'?B.maxY-0.25:c-fs*0.3;
+      const te=el('text',{x:tx,y:ty,fill:col,'font-size':fs,'font-weight':'600',transform:ax==='x'?`rotate(-90,${tx},${ty})`:''},gS);te.textContent='bm 1,90';
+    });
+  });
+
+  // Szintek: név, bázispont, a referencia-szint kontúrja segédvonalként
+  if(!isPrint&&S.levels.length>1||!isPrint&&tool==='base'){
+    const gL=el('g',{},targetSvg);
+    S.levels.forEach(l=>{
+      const cur=l.id===S.curLevel,B=boundsOf(levelWalls(l.id));
+      const col=cur?'#60a5fa':'#94a3b8';
+      const lx=B?B.minX:l.bx,ly=B?B.minY-Math.max(px*52,1.3):l.by-px*34;
+      const tx=el('text',{x:lx,y:ly,fill:col,'font-size':px*17,'font-weight':cur?'700':'500'},gL);
+      tx.textContent=l.name+(cur?' (aktuális)':'');
+      const r=px*7;
+      el('circle',{cx:l.bx,cy:l.by,r,fill:'none',stroke:col,'stroke-width':px*1.6},gL);
+      el('path',{d:`M${l.bx-r*1.7},${l.by} L${l.bx+r*1.7},${l.by} M${l.bx},${l.by-r*1.7} L${l.bx},${l.by+r*1.7}`,stroke:col,'stroke-width':px*1.2},gL);
+      const bt=el('text',{x:l.bx+r*1.5,y:l.by-r*1.3,fill:col,'font-size':px*11},gL);bt.textContent='B';
+    });
+    ghostLines().forEach(pl=>{
+      el('path',{d:'M'+pl.map(p=>p.x+','+p.y).join(' L'),fill:'none',stroke:'#22d3ee','stroke-width':px*1.8,'stroke-dasharray':`${px*9} ${px*5}`,opacity:'0.85'},gL);
+    });
+    const ref=refLevel();
+    if(ref&&ghostLines().length){
+      const g=ghostLines().flat(),gx=Math.min(...g.map(p=>p.x)),gy=Math.max(...g.map(p=>p.y));
+      const tt=el('text',{x:gx,y:gy+px*18,fill:'#22d3ee','font-size':px*12},gL);tt.textContent=`kontúr: ${ref.name}`;
+    }
+  }
+
+  // Falvastagság-feliratok (cm) a falban; közös falon csak egyszer
+  const gT=el('g',{},targetSvg);
+  S.walls.forEach(w=>{
+    const L=wLen(w),th=thOf(w);if(L<0.3)return;
+    const ps=partnersOf(w,rel);
+    if(ps.some(p=>wLen(p)>L+1e-3||(Math.abs(wLen(p)-L)<1e-3&&p.id<w.id)))return;
+    const ops=S.openings.filter(o=>o.wallId===w.id);
+    const busy=t=>ops.some(o=>opTs(o,w).some(ot=>Math.abs(ot-t)*L<o.ow/2+0.25));
+    const tt=[0.5,0.3,0.7,0.15,0.85].find(t=>!busy(t));if(tt===undefined)return;
+    const P=opPlace(null,w,tt);
+    let rot=Math.atan2(P.T.ty,P.T.tx)*180/Math.PI;if(rot>90)rot-=180;if(rot<-90)rot+=180;
+    const fs=isPrint?Math.min(0.19,Math.max(0.13,th*0.7)):Math.max(px*9,Math.min(0.17,th*0.7));
+    const txt=Math.round(th*100)+(w.eps>0&&!ps.length?`+${Math.round(w.eps*100)}`:'');
+    const te=el('text',{x:P.x,y:P.y,'text-anchor':'middle','dominant-baseline':'central','font-size':fs,'font-weight':'700',fill:isPrint?'#000':'#f8fafc','paint-order':'stroke',stroke:isPrint?'#fff':'#334155','stroke-width':fs*0.28,'stroke-linejoin':'round',transform:`rotate(${rot},${P.x},${P.y})`},gT);
+    te.textContent=txt;
+  });
+
+  // Kotta: belméretek az épületen kívül (külső falak), belső falaknál a helyiségben
+  if($('#chkDim').checked && S.walls.length){
+    renderDimensions(targetSvg,px,isPrint,rel);
+  }
+  // Draft & CAD guides
+  if(!isPrint){
+    const gD=el('g',{},targetSvg);
+    if((tool==='rect'||tool==='wall')&&$('#chkCad').checked){
+      // fogópontok folyamatosan: belső sarkok (tele), falak külső sarkai (üres)
+      const sz=px*3.2;
+      S.walls.forEach(w=>{
+        [{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}].forEach(p=>el('rect',{x:p.x-sz,y:p.y-sz,width:sz*2,height:sz*2,fill:'#22c55e99'},gD));
+        const o=offPts(w,thOf);[o[0],o[o.length-1]].forEach(p=>el('rect',{x:p.x-sz,y:p.y-sz,width:sz*2,height:sz*2,fill:'none',stroke:'#22c55eaa','stroke-width':px},gD));
+      });
+    }
+    if(hoverPt&&(tool==='rect'||tool==='wall')&&!drag){
+      const hp=hoverPt,cs=px*9;
+      el('line',{x1:hp.x-cs,y1:hp.y,x2:hp.x+cs,y2:hp.y,stroke:'#e2e8f0','stroke-width':px},gD);
+      el('line',{x1:hp.x,y1:hp.y-cs,x2:hp.x,y2:hp.y+cs,stroke:'#e2e8f0','stroke-width':px},gD);
+      if(tool==='wall'&&draft.length){
+        const lp=draft[draft.length-1],L=Math.hypot(hp.x-lp.x,hp.y-lp.y);
+        el('line',{x1:lp.x,y1:lp.y,x2:hp.x,y2:hp.y,stroke:'#60a5fa','stroke-width':px*1.6,'stroke-dasharray':'0.1 0.06'},gD);
+        const tt=el('text',{x:(lp.x+hp.x)/2,y:(lp.y+hp.y)/2-px*8,'text-anchor':'middle',fill:'#93c5fd','font-size':px*12},gD);
+        tt.textContent=hu(L,2,true)+' m';
+      }
+    }
+    guides.forEach(g=>el('line',{x1:g.x1,y1:g.y1,x2:g.x2,y2:g.y2,stroke:g.c,'stroke-width':px*1.2,'stroke-dasharray':'0.12 0.08'},gD));
+    if(cadPt){
+      el('rect',{x:cadPt.x-px*5,y:cadPt.y-px*5,width:px*10,height:px*10,fill:'none',stroke:'#22c55e','stroke-width':px*1.8},gD);
+    }
+    if(draft.length>=2){
+      if(tool==='rect'){
+        const p1=draft[0],p2=draft[1];
+        const rx=Math.min(p1.x,p2.x),ry=Math.min(p1.y,p2.y),rw=Math.abs(p2.x-p1.x),rh=Math.abs(p2.y-p1.y);
+        el('rect',{x:rx,y:ry,width:rw,height:rh,fill:'#3b82f622',stroke:'#60a5fa','stroke-width':px*2,'stroke-dasharray':'0.12 0.08'},gD);
+        const t=el('text',{x:rx+rw/2,y:ry+rh/2,'text-anchor':'middle',fill:'#93c5fd','font-size':px*13},gD);
+        t.textContent=`${hu(rw,2,true)} × ${hu(rh,2,true)} m`;
+      }else{
+        const d=draft.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ');
+        el('path',{d,fill:'none',stroke:'#60a5fa','stroke-width':px*2.2},gD);
+        draft.forEach(p=>el('circle',{cx:p.x,cy:p.y,r:px*4,fill:'#22c55e'},gD));
+      }
+    }
+    if(drag&&drag.kind==='box'){
+      const rx=Math.min(drag.x1,drag.x2),ry=Math.min(drag.y1,drag.y2),rw=Math.abs(drag.x2-drag.x1),rh=Math.abs(drag.y2-drag.y1);
+      const cross=drag.x2<drag.x1;
+      el('rect',{x:rx,y:ry,width:rw,height:rh,fill:cross?'#22c55e22':'#3b82f622',stroke:cross?'#22c55e':'#3b82f6','stroke-width':px*1.5,'stroke-dasharray':cross?'0.14 0.08':''},gD);
+    }
+  }
+}
+
+function renderDimensions(targetSvg,px,isPrint,rel){
+  rel=rel||detectRel();
+  const gK=el('g',{},targetSvg);
+  const col=isPrint?'#111':'#fb923c';
+  const fs=isPrint?(printWide?0.24:0.19):Math.max(0.14,px*11);
+  const sw=isPrint?0.01:px*1.1;
+  const gap=isPrint?(printWide?0.75:0.45):Math.max(0.4,px*24);
+  const tk=isPrint?0.07:Math.max(0.06,px*6);
+  const flexIds=new Set(S.rooms.filter(r=>r.flex).map(r=>r.id));
+  const dimLine=(w,nx,ny,off,extFrom)=>{
+    const L=wLen(w),dx=(w.x2-w.x1)/L,dy=(w.y2-w.y1)/L;
+    const a1={x:w.x1+nx*off,y:w.y1+ny*off},a2={x:w.x2+nx*off,y:w.y2+ny*off};
+    el('line',{x1:a1.x,y1:a1.y,x2:a2.x,y2:a2.y,stroke:col,'stroke-width':sw},gK);
+    [[w.x1,w.y1,a1],[w.x2,w.y2,a2]].forEach(([x,y,a])=>{
+      el('line',{x1:x+nx*extFrom,y1:y+ny*extFrom,x2:a.x+nx*0.07,y2:a.y+ny*0.07,stroke:col,'stroke-width':sw*0.7,opacity:'0.55'},gK);
+    });
+    const ang=Math.atan2(dy,dx)+Math.PI/4,tx=Math.cos(ang)*tk,ty=Math.sin(ang)*tk;
+    el('line',{x1:a1.x-tx,y1:a1.y-ty,x2:a1.x+tx,y2:a1.y+ty,stroke:col,'stroke-width':sw*1.4},gK);
+    el('line',{x1:a2.x-tx,y1:a2.y-ty,x2:a2.x+tx,y2:a2.y+ty,stroke:col,'stroke-width':sw*1.4},gK);
+    let rot=Math.atan2(dy,dx)*180/Math.PI;if(rot>90||rot<-90)rot+=180;
+    const mx=(a1.x+a2.x)/2+nx*fs*0.7,my=(a1.y+a2.y)/2+ny*fs*0.7;
+    const te=el('text',{x:mx,y:my,'text-anchor':'middle','dominant-baseline':'central',fill:col,'font-size':fs,transform:`rotate(${rot},${mx},${my})`},gK);
+    const v=hu(L,2,true)+(w.sag?` (ív ${hu(Math.abs(w.sag))})`:'');
+    te.textContent=flexIds.has(w.roomId)?`(${v})`:v;
+  };
+  S.rooms.forEach(r=>{
+    const ws=roomWalls(r).filter(w=>wLen(w)>=0.15&&!w.fstep);
+    const s=roomSign(r.id),done=new Set();
+    const key=w=>{let a=Math.round(wAng(w)*180/Math.PI);a=((a%180)+180)%180;return a+'|'+r2(wLen(w));};
+    const ext=ws.filter(w=>!rel.partOf.has(w)),int=ws.filter(w=>rel.partOf.has(w));
+    // külső falak: a kotta az épületen kívül, a falvastagságon túl
+    ext.forEach(w=>{
+      const L=wLen(w),nx=-s*(w.y2-w.y1)/L,ny=s*(w.x2-w.x1)/L;
+      let off=thOf(w)+(w.eps||0)+gap;
+      if(w.sag&&w.sag*s>0)off+=Math.abs(w.sag);
+      dimLine(w,nx,ny,off,thOf(w)+(w.eps||0)+0.05);
+      done.add(key(w));
+    });
+    // belső (közös) falak: a helyiségen belül, ha a méret máshol még nem szerepel
+    int.forEach(w=>{
+      if(done.has(key(w)))return;
+      const L=wLen(w),nx=s*(w.y2-w.y1)/L,ny=-s*(w.x2-w.x1)/L;
+      let off=isPrint?0.26:Math.max(0.2,px*15);
+      if(w.sag&&w.sag*s<0)off+=Math.abs(w.sag);
+      dimLine(w,nx,ny,off,0);
+      done.add(key(w));
+    });
+  });
+  if(!showOverall)return;
+  const B=bounds();if(!B)return;
+  const ow=B.maxX-B.minX,oh=B.maxY-B.minY,oDist=gap*2+0.35;
+  if(ow>0.5&&oh>0.5){
+    drawOverall(gK,B.minX,B.minY-oDist,B.maxX,B.minY-oDist,`${hu(ow,2,true)} (külső)`,col,sw,fs,0);
+    drawOverall(gK,B.maxX+oDist,B.minY,B.maxX+oDist,B.maxY,`${hu(oh,2,true)} (külső)`,col,sw,fs,90);
+  }
+}
+function drawOverall(g,x1,y1,x2,y2,txt,col,sw,fs,rot){
+  el('line',{x1,y1,x2,y2,stroke:col,'stroke-width':sw*1.1,opacity:'0.85'},g);
+  const tk=0.08;
+  el('line',{x1:x1-tk,y1:y1-tk,x2:x1+tk,y2:y1+tk,stroke:col,'stroke-width':sw*1.5},g);
+  el('line',{x1:x2-tk,y1:y2-tk,x2:x2+tk,y2:y2+tk,stroke:col,'stroke-width':sw*1.5},g);
+  const mx=(x1+x2)/2+(rot?fs*0.8:0),my=(y1+y2)/2+(rot?0:-fs*0.6);
+  const t=el('text',{x:mx,y:my,'text-anchor':'middle',fill:col,'font-size':fs,'font-weight':'600',transform:`rotate(${rot},${mx},${my})`},g);
+  t.textContent=txt;
+}
+/* Pointer & Touch (Stylus/Mouse draw, 2-finger pan/zoom) */
+const activePtrs=new Map();
+svg.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch'){
+    // első ujj: a korábbi, beragadt (meg nem szűnt) érintéseket eldobjuk – iPad/WebKit megszakításai miatt
+    if(e.isPrimary){activePtrs.clear();pinch=null;}
+    activePtrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(activePtrs.size===2){
+      drag=null;draft=[];guides=[];
+      const [a,b]=[...activePtrs.values()];
+      pinch={d:Math.hypot(b.x-a.x,b.y-a.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,view:{...view}};
+      render();return;
+    }
+  }
+  if(e.button===1||e.button===2||tool==='pan'||spaceDown||(e.button===0&&e.shiftKey&&tool==='select')){
+    svg.style.cursor='grabbing';
+    drag={kind:'pan',sx:e.clientX,sy:e.clientY,view:{...view}};return;
+  }
+  const raw=clientToWorld(e.clientX,e.clientY);
+
+  // Paint Floor / Slab mode
+  if(paintMode){
+    const hitR=S.rooms.find(r=>ptInRoom(raw.x,raw.y,r));
+    if(hitR){
+      snapshot();
+      setV(hitR,paintMode.kind,paintMode.val);
+      save();render();panel();
+    }
+    return;
+  }
+
+  if(tool==='base'){
+    const p=snapPt(raw),c=curLvl();snapshot();c.bx=r3(p.x);c.by=r3(p.y);save();setTool('select');showHint('Bázispont beállítva: '+c.name);return;
+  }
+  if(tool==='rect'){
+    const p=snapPt(raw);
+    draft=[p,p];
+    drag={kind:'rect',start:p};
+    render();return;
+  }
+  if(tool==='wall'){
+    const last=draft.length?draft[draft.length-1]:null;
+    const p=snapPt(raw,last);
+    if(draft.length>=3&&Math.hypot(p.x-draft[0].x,p.y-draft[0].y)<view.w*0.025){
+      addPolyRoom(draft);draft=[];guides=[];render();return;
+    }
+    draft.push(p);render();return;
+  }
+
+  // Select mode
+  const tol=view.w*0.025;
+  // 1. Check handles of selected wall
+  for(const wid of selWalls){
+    const w=S.walls.find(x=>x.id===wid);if(!w)continue;
+    const mid=wPtAt(w,0.5);
+    if(Math.hypot(raw.x-mid.x,raw.y-mid.y)<tol){
+      snapshot();
+      drag={kind:'sag',w,sx:raw.x,sy:raw.y};return;
+    }
+    if(Math.hypot(raw.x-w.x1,raw.y-w.y1)<tol){
+      snapshot();
+      drag={kind:'vtx',pts:findMatchingPts(w.x1,w.y1),moved:false};return;
+    }
+    if(Math.hypot(raw.x-w.x2,raw.y-w.y2)<tol){
+      snapshot();
+      drag={kind:'vtx',pts:findMatchingPts(w.x2,w.y2),moved:false};return;
+    }
+  }
+  // 2. Check opening tap (rotate door 90 deg / select opening)
+  for(const o of S.openings){
+    const w=S.walls.find(x=>x.id===o.wallId);if(!w)continue;
+    for(const t of opTs(o,w)){
+      const pt=opPlace(o,w,t);
+      if(Math.hypot(raw.x-pt.x,raw.y-pt.y)<Math.max(tol,o.ow*0.55)){
+        selOp=o.id;selRoom=w.roomId;selWalls.clear();
+        drag={kind:'op',o,w,sx:e.clientX,sy:e.clientY,moved:false};
+        render();panel();return;
+      }
+    }
+  }
+  // 3. Check wall hit
+  let hitW=null,bestD=tol;
+  S.walls.forEach(w=>{
+    // találat: a falvastagságon belül, vagy a belső falsík közelében
+    const d=ptInPoly(wallPoly(w),raw.x,raw.y)?0:ptSegDist(raw.x,raw.y,w.x1,w.y1,w.x2,w.y2).d*1.6;
+    if(d<bestD){bestD=d;hitW=w;}
+  });
+  if(hitW){
+    if(e.ctrlKey||e.metaKey||$('#chkMulti').checked){
+      if(selWalls.has(hitW.id))selWalls.delete(hitW.id);else selWalls.add(hitW.id);
+      selRoom=hitW.roomId;selOp=null;setLevel(lvlOf(S.rooms.find(r=>r.id===hitW.roomId)));render();panel();return;
+    }
+    if(!selWalls.has(hitW.id)){selWalls.clear();selWalls.add(hitW.id);}
+    selRoom=hitW.roomId;selOp=null;setLevel(lvlOf(S.rooms.find(r=>r.id===hitW.roomId)));
+    // collect all endpoints matching selected walls' endpoints so adjacent walls stretch cleanly
+    const vtxList=[];
+    const seen=new Set();
+    selWalls.forEach(id=>{
+      const w=S.walls.find(x=>x.id===id);if(!w)return;
+      findMatchingPts(w.x1,w.y1).forEach(m=>{const k=m.w.id+'_'+m.end;if(!seen.has(k)){seen.add(k);vtxList.push({...m,ox:m.end===1?m.w.x1:m.w.x2,oy:m.end===1?m.w.y1:m.w.y2});}});
+      findMatchingPts(w.x2,w.y2).forEach(m=>{const k=m.w.id+'_'+m.end;if(!seen.has(k)){seen.add(k);vtxList.push({...m,ox:m.end===1?m.w.x1:m.w.x2,oy:m.end===1?m.w.y1:m.w.y2});}});
+    });
+    drag={kind:'wallMove',sx:raw.x,sy:raw.y,vtxList,moved:false};
+    render();panel();return;
+  }
+  // 4. Room hit or CAD box selection
+  const hitR=S.rooms.find(r=>ptInRoom(raw.x,raw.y,r));
+  if(hitR){selRoom=hitR.id;selWalls.clear();selOp=null;setLevel(lvlOf(hitR));render();panel();}
+  else{selRoom=null;selWalls.clear();selOp=null;}
+  drag={kind:'box',x1:raw.x,y1:raw.y,x2:raw.x,y2:raw.y,sx:e.clientX,sy:e.clientY};
+  render();panel();
+});
+
+window.addEventListener('pointermove',e=>{
+  if(e.pointerType==='touch'&&activePtrs.has(e.pointerId)){
+    activePtrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch&&activePtrs.size===2){
+      const [a,b]=[...activePtrs.values()];
+      const nd=Math.hypot(b.x-a.x,b.y-a.y)||1;
+      const ncx=(a.x+b.x)/2,ncy=(a.y+b.y)/2;
+      const scale=pinch.d/nd;
+      const rect=svg.getBoundingClientRect();
+      const nw=Math.max(3,Math.min(80,pinch.view.w*scale));
+      const nh=nw*(rect.height/rect.width);
+      const dx=(ncx-pinch.cx)/(rect.width||1)*nw;
+      const dy=(ncy-pinch.cy)/(rect.height||1)*nh;
+      view.w=nw;view.h=nh;
+      view.x=pinch.view.x+(pinch.view.w-nw)/2-dx;
+      view.y=pinch.view.y+(pinch.view.h-nh)/2-dy;
+      render();return;
+    }
+  }
+  if(!drag){
+    // rajzolás közben folyamatos CAD fogópont/segédvonal (toll, egér)
+    if((tool==='rect'||tool==='wall')&&!pinch&&!palDrag&&svg.contains(e.target)){
+      const raw=clientToWorld(e.clientX,e.clientY);
+      hoverPt=snapPt(raw,tool==='wall'&&draft.length?draft[draft.length-1]:null);
+      render();
+    }
+    return;
+  }
+  const raw=clientToWorld(e.clientX,e.clientY);
+  if(drag.kind==='pan'){
+    const rect=svg.getBoundingClientRect();
+    view.x=drag.view.x-(e.clientX-drag.sx)/(rect.width||1)*drag.view.w;
+    view.y=drag.view.y-(e.clientY-drag.sy)/(rect.height||1)*drag.view.h;
+    render();return;
+  }
+  if(drag.kind==='rect'){
+    draft[1]=snapPt(raw,draft[0]);render();return;
+  }
+  if(drag.kind==='vtx'){
+    const p=snapPt(raw);
+    drag.pts.forEach(m=>{if(m.end===1){m.w.x1=p.x;m.w.y1=p.y;}else{m.w.x2=p.x;m.w.y2=p.y;}});
+    drag.moved=true;render();return;
+  }
+  if(drag.kind==='wallMove'){
+    if(!drag.moved&&Math.hypot(raw.x-drag.sx,raw.y-drag.sy)<0.04)return;
+    if(!drag.moved){snapshot();drag.moved=true;}
+    const step=$('#chkGrid').checked?(parseFloat($('#gridStep').value)||0.1):0.01;
+    const dx=Math.round((raw.x-drag.sx)/step)*step;
+    const dy=Math.round((raw.y-drag.sy)/step)*step;
+    drag.vtxList.forEach(m=>{
+      const nx=r3(m.ox+dx),ny=r3(m.oy+dy);
+      if(m.end===1){m.w.x1=nx;m.w.y1=ny;}else{m.w.x2=nx;m.w.y2=ny;}
+    });
+    render();return;
+  }
+  if(drag.kind==='sag'){
+    const w=drag.w,L=wLen(w)||1;
+    const mx=(w.x1+w.x2)/2,my=(w.y1+w.y2)/2;
+    const nx=-(w.y2-w.y1)/L,ny=(w.x2-w.x1)/L;
+    w.sag=r2((raw.x-mx)*nx+(raw.y-my)*ny);
+    render();return;
+  }
+  if(drag.kind==='op'){
+    if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6){
+      if(!drag.moved){snapshot();drag.moved=true;}
+      const t=ptSegDist(raw.x,raw.y,drag.w.x1,drag.w.y1,drag.w.x2,drag.w.y2).t;
+      drag.o.pos=Math.max(0.06,Math.min(0.94,r2(t)));
+      render();
+    }
+    return;
+  }
+  if(drag.kind==='box'){
+    drag.x2=raw.x;drag.y2=raw.y;render();
+  }
+});
+
+// a böngésző által megszakított érintés (iPad: rendszergesztus, görgetés-kísérlet) ne ragadjon be
+window.addEventListener('pointercancel',e=>{
+  activePtrs.delete(e.pointerId);
+  if(activePtrs.size<2)pinch=null;
+  if(drag&&drag.kind==='rect'){draft=[];guides=[];}
+  drag=null;render();
+});
+// iOS: az érintést a vászon kapja meg, ne az oldal görgetése/nagyítása
+['touchstart','touchmove','touchend'].forEach(ev=>svg.addEventListener(ev,e=>{if(e.cancelable)e.preventDefault();},{passive:false}));
+document.addEventListener('gesturestart',e=>e.preventDefault());
+window.addEventListener('pointerup',e=>{
+  activePtrs.delete(e.pointerId);
+  if(activePtrs.size<2)pinch=null;
+  if(!drag)return;
+  if(drag.kind==='pan')svg.style.cursor=spaceDown||tool==='pan'?'grab':tool==='select'?'default':'crosshair';
+  if(drag.kind==='rect'){
+    addRectRoom(draft[0],draft[1]);
+    draft=[];guides=[];
+  }else if(drag.kind==='op'&&!drag.moved){
+    // Tap on door -> rotate 90 deg clockwise!
+    if(drag.o.type!=='Ablak'){
+      snapshot();
+      drag.o.dir=((drag.o.dir||0)+1)%4;
+      save();render();panel();
+    }
+  }else if(drag.kind==='box'){
+    const rx1=Math.min(drag.x1,drag.x2),rx2=Math.max(drag.x1,drag.x2);
+    const ry1=Math.min(drag.y1,drag.y2),ry2=Math.max(drag.y1,drag.y2);
+    if(rx2-rx1>0.15||ry2-ry1>0.15){
+      const cross=drag.x2<drag.x1;
+      selWalls.clear();
+      S.walls.forEach(w=>{
+        const in1=w.x1>=rx1&&w.x1<=rx2&&w.y1>=ry1&&w.y1<=ry2;
+        const in2=w.x2>=rx1&&w.x2<=rx2&&w.y2>=ry1&&w.y2<=ry2;
+        const mid=wPtAt(w,0.5);
+        const inM=mid.x>=rx1&&mid.x<=rx2&&mid.y>=ry1&&mid.y<=ry2;
+        if(cross?(in1||in2||inM):(in1&&in2))selWalls.add(w.id);
+      });
+    }
+    render();panel();
+  }else if(drag.moved||drag.kind==='vtx'||drag.kind==='sag'){
+    save();render();panel();
+  }
+  drag=null;
+});
+
+svg.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=e.deltaY>0?1.12:0.89;
+  const p=clientToWorld(e.clientX,e.clientY);
+  const nw=Math.max(3,Math.min(80,view.w*f));
+  const rx=(p.x-view.x)/view.w,ry=(p.y-view.y)/view.h;
+  view.w=nw;fitViewToAspect();
+  view.x=p.x-rx*view.w;view.y=p.y-ry*view.h;
+  render();
+},{passive:false});
+
+/* Drag openings from toolbar onto walls */
+$$('.chip').forEach(btn=>{
+  btn.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    palDrag={type:btn.dataset.pal};
+    const g=$('#ghost');g.textContent=palDrag.type;g.style.display='block';
+    g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';
+  });
+});
+window.addEventListener('pointermove',e=>{
+  if(!palDrag)return;
+  const g=$('#ghost');g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';
+});
+window.addEventListener('pointerup',e=>{
+  if(!palDrag)return;
+  $('#ghost').style.display='none';
+  const type=palDrag.type;palDrag=null;
+  const rect=svg.getBoundingClientRect();
+  if(e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom){
+    const raw=clientToWorld(e.clientX,e.clientY);
+    let best=null,bd=1.2,bt=0.5;
+    S.walls.forEach(w=>{
+      const res=ptSegDist(raw.x,raw.y,w.x1,w.y1,w.x2,w.y2);
+      if(res.d<bd){bd=res.d;best=w;bt=res.t;}
+    });
+    if(best){
+      const def=S.freqOps.find(x=>x.type===type)||DEFAULT_OPS[0];
+      snapshot();
+      const o={id:uid(),wallId:best.id,type,alt:def.alt,ow:def.ow,oh:def.oh,sh:def.sh,pm:def.pm,cnt:1,pos:Math.max(0.1,Math.min(0.9,r2(bt))),dir:0};
+      S.openings.push(o);
+      selOp=o.id;save();render();panel();openOpModal(o);
+    }
+  }
+});
+
+/* Opening Modal */
+function openOpModal(o){
+  modalOp=o;
+  const m=$('#modal');
+  m.innerHTML=`<h3><span>${esc(o.type)} méretezése</span><button class="btn" id="mClose">✕</button></h3>
+    <div class="row"><label>Gyakori méret</label><select id="mFreq"><option value="">— válassz —</option>${S.freqOps.map((f,i)=>`<option value="${i}">${esc(f.type)}: ${f.ow}${f.sh?'+'+f.sh:''}/${f.oh} (pm ${f.pm})</option>`).join('')}</select></div>
+    <div class="row"><label>Altípus</label><input id="mAlt" value="${esc(o.alt)}"></div>
+    <div class="row"><label>Szélesség (m)</label><input id="mW" type="number" step="0.05" value="${o.ow}"></div>
+    <div class="row"><label>Magasság (m)</label><input id="mH" type="number" step="0.05" value="${o.oh}"></div>
+    <div class="row"><label>Redőnytok (m)</label><input id="mSh" type="number" step="0.05" value="${o.sh||0}"></div>
+    <div class="row"><label>Parapet pm (m)</label><input id="mPm" type="number" step="0.05" value="${o.pm||0}"></div>
+    <div class="row"><label>Darabszám (db)</label><input id="mCnt" type="number" min="1" max="12" value="${o.cnt||1}"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      ${(o.cnt||1)>1?'<button class="btn" id="mSplit">Szétbontás</button>':''}
+      <button class="btn dan" id="mDel">Törlés</button>
+      <button class="btn pri" id="mOk">Rendben</button>
+    </div>`;
+  $('#modalWrap').classList.add('open');
+  $('#mClose').onclick=()=>$('#modalWrap').classList.remove('open');
+  $('#mFreq').onchange=e=>{
+    const f=S.freqOps[e.target.value];if(!f)return;
+    $('#mAlt').value=f.alt;$('#mW').value=f.ow;$('#mH').value=f.oh;$('#mSh').value=f.sh;$('#mPm').value=f.pm;
+  };
+  $('#mOk').onclick=()=>{
+    snapshot();
+    o.alt=$('#mAlt').value;
+    o.ow=Math.max(0.2,parseFloat($('#mW').value)||1);
+    o.oh=Math.max(0.2,parseFloat($('#mH').value)||1);
+    o.sh=Math.max(0,parseFloat($('#mSh').value)||0);
+    o.pm=Math.max(0,parseFloat($('#mPm').value)||0);
+    o.cnt=Math.max(1,parseInt($('#mCnt').value)||1);
+    // save to recent/frequent list if new
+    if(!S.freqOps.some(f=>f.type===o.type&&f.ow===o.ow&&f.oh===o.oh&&f.pm===o.pm&&f.sh===o.sh)){
+      S.freqOps.unshift({type:o.type,alt:o.alt,ow:o.ow,oh:o.oh,sh:o.sh,pm:o.pm});
+      if(S.freqOps.length>14)S.freqOps.pop();
+    }
+    $('#modalWrap').classList.remove('open');
+    save();render();panel();
+  };
+  $('#mDel').onclick=()=>{
+    snapshot();S.openings=S.openings.filter(x=>x.id!==o.id);selOp=null;
+    $('#modalWrap').classList.remove('open');save();render();panel();
+  };
+  if($('#mSplit'))$('#mSplit').onclick=()=>{
+    snapshot();
+    const w=S.walls.find(x=>x.id===o.wallId),L=w?wLen(w):3;
+    const cnt=o.cnt,span=Math.min(0.7,cnt*(o.ow/L+0.08));
+    for(let i=1;i<cnt;i++){
+      const t=Math.max(0.06,Math.min(0.94,o.pos-span/2+(span/(cnt-1))*i));
+      S.openings.push({...o,id:uid(),cnt:1,pos:r2(t)});
+    }
+    o.pos=r2(Math.max(0.06,o.pos-span/2));o.cnt=1;
+    $('#modalWrap').classList.remove('open');save();render();panel();
+  };
+}
+
+/* Popups (Freq Openings, Floor, Slab) */
+function closePops(){$$('.pop').forEach(p=>p.classList.remove('open'));$$('.mi').forEach(m=>m.classList.remove('open'));}
+$('#btnFreqOp').onclick=e=>{
+  e.stopPropagation();const p=$('#popFreqOp'),op=p.classList.contains('open');closePops();
+  if(!op){
+    p.innerHTML=S.freqOps.map((f,i)=>`<button data-fi="${i}"><span>${esc(f.type)} · ${f.ow}${f.sh?'+'+f.sh:''}/${f.oh}</span><span class="sub">pm ${f.pm}</span></button>`).join('');
+    p.classList.add('open');
+    p.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      const f=S.freqOps[b.dataset.fi];
+      if(selWalls.size===1){
+        const wid=[...selWalls][0];snapshot();
+        const o={id:uid(),wallId:wid,type:f.type,alt:f.alt,ow:f.ow,oh:f.oh,sh:f.sh,pm:f.pm,cnt:1,pos:0.5,dir:0};
+        S.openings.push(o);selOp=o.id;save();render();panel();
+      }else alert('Jelölj ki egy falat, vagy húzd a nyílászárót a falra!');
+      closePops();
+    });
+  }
+};
+$$('.catBtn').forEach(btn=>btn.onclick=e=>{
+  e.stopPropagation();
+  const k=btn.dataset.cat,p=$(`.pop[data-catpop="${k}"]`),op=p.classList.contains('open');closePops();
+  if(op)return;
+  p.innerHTML=catOpts(k).map(v=>`<button data-v="${esc(v)}">${esc(v)}</button>`).join('')+
+    `<hr><button data-x="custom" class="x">✎ Egyéb (saját szöveg)…</button><button data-x="clear"><span>— érték törlése</span></button>`;
+  p.classList.add('open');
+  p.querySelectorAll('button').forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation();closePops();
+    if(b.dataset.x==='custom'){
+      const v=(prompt(`${CATS[k].label} – saját érték (pl. "napelem 5 kWp", "gázkonvektor + kandalló"):`)||'').trim();
+      if(v)startPaint(k,v);
+    }else if(b.dataset.x==='clear')startPaint(k,'');
+    else startPaint(k,b.dataset.v);
+  });
+});
+function startPaint(kind,val){
+  paintMode={kind,val};
+  $('#paintTxt').textContent=`${CATS[kind].label}: ${val||'(törlés)'} — koppints a helyiségekre`;
+  $('#paintBanner').classList.add('on');
+}
+function stopPaint(){paintMode=null;$('#paintBanner').classList.remove('on');}
+$('#paintStop').onclick=stopPaint;
+$('#paintAll').onclick=()=>{
+  if(!paintMode)return;
+  if(!S.rooms.length){alert('Még nincs helyiség.');return;}
+  snapshot();
+  S.rooms.forEach(r=>setV(r,paintMode.kind,paintMode.val));
+  stopPaint();save();render();panel();
+};
+
+/* Right Panel */
+function panel(){
+  const p=$('#panel');
+  if(tab==='rooms'){
+    const tot=S.rooms.reduce((a,r)=>a+roomArea(r),0);
+    p.innerHTML=`<h4>Helyiségek (${S.rooms.length}) · nettó ${hu(tot,2,true)} m²</h4><table><tr><th>Név</th><th>m²</th><th>bm</th><th>Padló / Födém</th><th>Gépészet</th></tr>`+
+      S.rooms.map(r=>`<tr class="${r.id===selRoom?'selrow':''}" data-rid="${r.id}"><td>${roomNo(r)}. ${esc(r.name)}</td><td>${hu(roomArea(r),2,true)}</td><td>${hu(rH(r))}</td><td class="muted">${esc([r.floor,r.slab].filter(Boolean).join(', ')||'—')}</td><td class="muted">${esc(SYS_KEYS.map(k=>getV(r,k)).filter(Boolean).join(', ')||'—')}</td></tr>`).join('')+`</table>`;
+    p.querySelectorAll('tr[data-rid]').forEach(tr=>tr.onclick=()=>{selRoom=tr.dataset.rid;selWalls.clear();selOp=null;render();panel();});
+    return;
+  }
+  if(tab==='building'){
+    const b=S.b;
+    p.innerHTML=`<div class="sec"><h4>Felmérési adatok</h4>
+      <div class="row"><label>Megrendelő</label><input id="bCust" value="${esc(b.cust)}"></div>
+      <div class="row"><label>Ingatlan címe</label><input id="bAddr" value="${esc(b.addr)}"></div>
+      <div class="row"><label>HRSZ</label><input id="bHrsz" value="${esc(b.hrsz)}"></div>
+      <div class="row"><label>Dátum</label><input id="bDate" type="date" value="${esc(b.date)}"></div>
+      <div class="row"><label>Tájolás (°)</label><input id="bOri" type="number" value="${b.orient}"></div>
+      <p class="muted">Tájolás: a rajz „felfelé” iránya hány fokkal tér el északtól, óramutató szerint (0 = a rajz teteje észak). Az Excelben a falak/nyílászárók szöge: 0° É, 90° K, 180° D, 270° Ny.</p>
+      <div class="row"><label>Alap belm. (m)</label><input id="bBm" type="number" step="0.05" value="${b.bm}"></div>
+      <div class="row"><label>Padlómag. (m)</label><input id="bPm" type="number" step="0.05" value="${b.pm}"></div>
+      <div class="row"><label>Alap falvast. (m)</label><input id="bTh" type="number" step="0.01" value="${b.defTh||0.30}"></div>
+      <p class="muted">Az alap belmagasságtól eltérő helyiségek (Tulajdonságok fül) a nyomtatási lapon pl. „bm: 2,7 / 2,3” formában jelennek meg.</p></div>
+      <div class="sec"><h4>Megjegyzések a nyomtatási lapra</h4>
+      ${[['wallNote','Falazat'],['slabNote','Födém / padló'],['winNote','Nyílászárók'],['heatNote','Fűtés'],['dhwNote','HMV'],['lightNote','Világítás'],['pvNote','Megújuló'],['note','Egyéb megjegyzés']].map(([k,l])=>
+        `<div class="row"><label>${l}</label><textarea data-note="${k}" rows="1">${esc(b[k]||'')}</textarea></div>`).join('')}</div>
+      <div class="sec"><h4>Export</h4>
+      <div class="row"><button class="btn pri" id="pXls">Excel WinWatt-hoz (.xlsx)</button><button class="btn" id="pPrn">A4 Nyomtatás</button><button class="btn" id="pPlan">Csak rajz</button></div></div>`;
+    const bind=(id,k,num)=>{$(id).onchange=e=>{b[k]=num?parseFloat(e.target.value)||0:e.target.value;save();updateTopInfo();};};
+    bind('#bCust','cust');bind('#bAddr','addr');bind('#bHrsz','hrsz');bind('#bDate','date');
+    bind('#bOri','orient',1);bind('#bPm','pm',1);bind('#bTh','defTh',1);
+    $('#bBm').onchange=e=>{
+      const nv=parseFloat(e.target.value)||2.7,ov=b.bm;
+      // az eddig alapértéken lévő helyiségek kövessék az új alapot
+      S.rooms.forEach(r=>{if(r.height&&Math.abs(r.height-ov)<1e-6)r.height=null;if(r.height&&Math.abs(r.height-nv)<1e-6)r.height=null;});
+      b.bm=nv;save();render();
+    };
+    p.querySelectorAll('[data-note]').forEach(t=>t.onchange=()=>{b[t.dataset.note]=t.value;save();});
+    $('#pXls').onclick=exportXls;$('#pPrn').onclick=printA4;$('#pPlan').onclick=printPlan;
+    return;
+  }
+  // Props tab
+  const r=S.rooms.find(x=>x.id===selRoom);
+  const ws=[...selWalls].map(id=>S.walls.find(w=>w.id===id)).filter(Boolean);
+  const op=S.openings.find(o=>o.id===selOp);
+  let html='';
+  if(op){
+    html+=`<div class="sec"><h4>Kijelölt nyílászáró</h4>
+      <p>${esc(op.type)} (${esc(op.alt)}) — <b>${op.ow}${op.sh?'+'+op.sh:''} × ${op.oh} m</b>, pm: ${op.pm} m, ${op.cnt||1} db</p>
+      <div class="row"><button class="btn pri" id="opEdit">Méretezés</button>${op.type!=='Ablak'?'<button class="btn" id="opRot">Forgatás 90°</button>':''}<button class="btn dan" id="opDel">Törlés</button></div></div>`;
+  }
+  if(ws.length){
+    const w0=ws[0];
+    html+=`<div class="sec"><h4>Kijelölt falak (${ws.length} db)</h4>
+      ${ws.length===1?`<div class="row"><label>Belső hossz (m)</label><input id="wLen" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(wLen(w0))}"></div>
+      <p class="muted">${(()=>{const rr=S.rooms.find(x=>x.id===w0.roomId);return rr&&isRectRoom(rr)?'Téglalap helyiség: a szemközti oldal is ugyanígy változik.':'A fal vége (és a mögötte lévő falszakaszok) tolódnak el.';})()} A szomszéd helyiségek követik.</p>`:''}
+      <div class="row"><label>Vastagság (m)</label><input id="wTh" type="number" step="0.01" value="${thOf(w0)}"></div>
+      <div class="row" style="flex-wrap:wrap">${[0.10,0.12,0.25,0.30,0.38,0.45,0.50].map(v=>`<button class="btn" data-th="${v}">${Math.round(v*100)}</button>`).join('')}<span class="muted">cm</span></div>
+      <p class="muted">Vastagításnál a helyiség belmérete marad, a fal kifelé nő, a szomszédok eltolódnak; a közös fal mindkét oldalon azonos.</p>
+      <div class="row"><label>Falazat</label><input id="wMat" list="dl_wall" value="${esc(w0.mat||'')}"></div>
+      <datalist id="dl_wall">${WALL_MATS.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
+      <div class="row"><label>EPS sziget. (m)</label><input id="wEps" type="number" step="0.01" value="${w0.eps||0}"></div>
+      ${ws.length===1?`<div class="row"><label>Ívbelógás (m)</label><input id="wSag" type="number" step="0.05" value="${w0.sag||0}"></div>`:''}
+      <div class="row"><button class="btn pri" id="wApply">Alkalmaz</button><button class="btn dan" id="wDel">Fal törlése</button></div>
+      ${ws.length>=2?`<div class="row"><button class="btn" id="wAlign">Külső síkok egy vonalba</button></div><p class="muted">Pl. két helyiség déli falát jelöld ki (keret vagy Ctrl+koppintás): a külső síkjuk egy vonalba kerül, és ez később is megmarad.</p>`:''}</div>`;
+  }
+  if(r){
+    html+=`<div class="sec"><h4>${roomNo(r)}. helyiség (${hu(roomArea(r),2,true)} m²)</h4>
+      <div class="row"><label>Név / funkció</label><input id="rName" list="dl_func" value="${esc(r.name)}"><datalist id="dl_func">${catOpts('func').map(v=>`<option value="${esc(v.charAt(0).toUpperCase()+v.slice(1))}">`).join('')}</datalist></div>
+      <div class="row"><label>Típus</label><select id="rType">${['Fűtött','Fűtetlen','Pince','Kültér'].map(t=>`<option ${r.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      ${(()=>{const sc=roomSecCalc(r);return sc?`<p class="muted" style="color:#fbbf24">Padlástér: teljes ${hu(sc.area,2,true)} m² · 1,90 m feletti ${hu(sc.area19,2,true)} m² · térfogat ${hu(sc.vol,1,true)} m³ · átl. bm ${hu(sc.hAvg,2,true)} m</p>`:'';})()}
+      <div class="row"><button class="btn" id="rSec">Padlástér metszet (${esc(lvlName(lvlOf(r)))})…</button></div>
+      <div class="row"><label>Kiadódó</label><label class="chk" style="flex:1"><input id="rFlex" type="checkbox" ${r.flex?'checked':''}> méretét a szomszédok adják</label></div>
+      ${r.flex?'<p class="muted">Kiadódó helyiség: falai a szomszéd helyiségek falaihoz és a homlokzat vonalához igazodnak; itt gyűlnek össze a mérési/építési pontatlanságok. Kottája zárójelben.</p>':''}
+      ${isRectRoom(r)&&!r.flex?(()=>{const b=rectBox(r);return `<div class="row"><label>Vízszintes ↔ (m)</label><input id="rW" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.x2-b.x1)}"></div>
+      <div class="row"><label>Függőleges ↕ (m)</label><input id="rHh" data-disto type="number" step="0.01" inputmode="decimal" value="${r2(b.y2-b.y1)}"></div>`;})():''}
+      <div class="row"><label>Belmagasság (m)</label><input id="rH" type="number" step="0.05" value="${rH(r)}"></div>
+      ${Object.keys(CATS).filter(k=>k!=='func').map(k=>`<div class="row"><label>${CATS[k].label}</label><input data-rc="${k}" list="dl_${k}" placeholder="—" value="${esc(getV(r,k))}"></div>
+        <datalist id="dl_${k}">${catOpts(k).map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`).join('')}
+      <div class="row"><button class="btn dan" id="rDel">Helyiség törlése</button></div></div>`;
+  }
+  if(!html)html='<p class="muted">Koppints egy helyiségre, falra vagy nyílászáróra, vagy válassz fent rajzeszközt (Téglalap / Fal).</p>';
+  p.innerHTML=html;
+
+  if(op){
+    $('#opEdit').onclick=()=>openOpModal(op);
+    if($('#opRot'))$('#opRot').onclick=()=>{snapshot();op.dir=((op.dir||0)+1)%4;save();render();};
+    $('#opDel').onclick=()=>{snapshot();S.openings=S.openings.filter(x=>x.id!==op.id);selOp=null;save();render();panel();};
+  }
+  if(ws.length){
+    const applyW=()=>{
+      snapshot();
+      const th=parseFloat($('#wTh').value),mat=$('#wMat').value,eps=parseFloat($('#wEps').value)||0;
+      setWallsThickness(ws,th,eps,mat);
+      if(ws.length===1)ws[0].sag=parseFloat($('#wSag').value)||0;
+      save();render();panel();
+    };
+    $('#wApply').onclick=applyW;
+    if($('#wAlign'))$('#wAlign').onclick=()=>{snapshot();if(alignFacades(ws)){save();render();panel();}else undoStack.pop(),updateUndoBtns();};
+    p.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{$('#wTh').value=b.dataset.th;applyW();});
+    if($('#wLen'))$('#wLen').onchange=e=>{
+      const v=parseFloat(e.target.value);if(!(v>0.05))return;
+      snapshot();setWallLength(ws[0],v);save();render();panel();
+    };
+    $('#wDel').onclick=()=>{
+      snapshot();const ids=new Set(ws.map(w=>w.id));
+      S.walls=S.walls.filter(w=>!ids.has(w.id));
+      S.openings=S.openings.filter(o=>!ids.has(o.wallId));
+      selWalls.clear();save();render();panel();
+    };
+  }
+  if(r){
+    $('#rName').onchange=e=>{snapshot();r.name=e.target.value.trim();const f=FUNCS.find(x=>x.toLowerCase()===r.name.toLowerCase());r.func=f||r.name.toLowerCase();save();render();};
+    $('#rSec').onclick=()=>{setLevel(lvlOf(r));openSectionModal();};
+    $('#rFlex').onchange=e=>{snapshot();r.flex=e.target.checked;if(r.flex)fitFlexRooms();else relayout(null,new Set([r.id]));save();render();panel();};
+    const rs=()=>{snapshot();resizeRect(r,parseFloat($('#rW').value),parseFloat($('#rHh').value));save();render();panel();};
+    if($('#rW')){$('#rW').onchange=rs;$('#rHh').onchange=rs;}
+    $('#rType').onchange=e=>{r.type=e.target.value;save();render();};
+    $('#rH').onchange=e=>{
+      snapshot();const v=parseFloat(e.target.value);
+      r.height=(!(v>0)||Math.abs(v-S.b.bm)<1e-6)?null:v;
+      save();render();
+    };
+    p.querySelectorAll('[data-rc]').forEach(inp=>inp.onchange=()=>{snapshot();setV(r,inp.dataset.rc,inp.value.trim());save();render();});
+    $('#rDel').onclick=()=>{
+      snapshot();
+      const wids=new Set(S.walls.filter(w=>w.roomId===r.id).map(w=>w.id));
+      S.rooms=S.rooms.filter(x=>x.id!==r.id);
+      S.walls=S.walls.filter(w=>w.roomId!==r.id);
+      S.openings=S.openings.filter(o=>!wids.has(o.wallId));
+      selRoom=null;selWalls.clear();save();render();panel();
+    };
+  }
+}
+
+/* ===== Excel (.xlsx) export – WinWatt "Adatok összerendelése" szerinti lapok és oszlopok =====
+   Helyiségek:  A Típus | C Név kóddal | F Magasság (m) | I Nettó terület (m²) | N Bérelhető térfogat (m³)
+   Nyílászárók: A Típus | B Altípus | D Helyiség 1 | E Helyiség 2 | I Magasság (m) | J Szélesség (m) | K Szög (°)
+   Falak:       B Helyiség 1 | C Helyiség 2 | E Magasság (m) | F Hossz (m) | H Szög (°) | I Falak felülete (m²) | U Fal típusa
+   Helyiségek A oszlop (Típus) = a helyiség neve (lakószoba, WC, konyha…). Belső falnál/ajtónál a Szög üres.
+   Szög: a külső normális égtája, 0° = É, 90° = K, 180° = D, 270° = Ny (a rajz "fel" iránya + Tájolás). */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_T[(c^u8[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function zipStore(files){ // files: [{name, data:Uint8Array}] – tömörítés nélküli ZIP
+  const enc=new TextEncoder(),parts=[],central=[];let off=0;
+  const d=new Date(),dt=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF,dd=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+  files.forEach(f=>{
+    const nm=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);
+    h.setUint16(10,dt,true);h.setUint16(12,dd,true);h.setUint32(14,crc,true);h.setUint32(18,sz,true);h.setUint32(22,sz,true);
+    h.setUint16(26,nm.length,true);h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer),nm,f.data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
+    c.setUint16(12,dt,true);c.setUint16(14,dd,true);c.setUint32(16,crc,true);c.setUint32(20,sz,true);c.setUint32(24,sz,true);
+    c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer),nm);
+    off+=30+nm.length+sz;
+  });
+  const csz=central.reduce((a,b)=>a+b.length,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,csz,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function colL(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
+function xmlEsc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+// sheets: [{name, rows:[ {colIndex:value,...} ]}] – az első sor a fejléc
+function buildXlsx(sheets){
+  const enc=new TextEncoder(),ss=[],ssIdx=new Map();
+  const si=s=>{s=String(s);if(!ssIdx.has(s)){ssIdx.set(s,ss.length);ss.push(s);}return ssIdx.get(s);};
+  const sheetXml=sh=>{
+    const rows=sh.rows.map((row,ri)=>{
+      const cells=Object.keys(row).map(Number).sort((a,b)=>a-b).map(ci=>{
+        const v=row[ci],ref=colL(ci)+(ri+1);
+        if(v===''||v==null)return '';
+        if(typeof v==='number'&&isFinite(v))return `<c r="${ref}"><v>${v}</v></c>`;
+        return `<c r="${ref}" t="s"${ri===0?' s="1"':''}><v>${si(v)}</v></c>`;
+      }).join('');
+      return `<row r="${ri+1}">${cells}</row>`;
+    }).join('');
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows}</sheetData></worksheet>`;
+  };
+  const sx=sheets.map(sheetXml);
+  const files=[
+    ['[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>`],
+    ['_rels/.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ['xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${xmlEsc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId${sheets.length+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`],
+    ['xl/styles.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+    ...sx.map((x,i)=>[`xl/worksheets/sheet${i+1}.xml`,x])
+  ];
+  files.push(['xl/sharedStrings.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">${ss.map(s=>`<si><t xml:space="preserve">${xmlEsc(s)}</t></si>`).join('')}</sst>`]);
+  return zipStore(files.map(([name,txt])=>({name,data:enc.encode(txt)})));
+}
+function azimuth(nx,ny){return Math.round(((Math.atan2(nx,-ny)*180/Math.PI+(+S.b.orient||0))%360+360)%360);}
+function roomCode(r){return `${roomNo(r)}. ${r.name}`;}
+function wallTypeName(w){return `${w.mat||'Fal'} ${Math.round(thOf(w)*100)} cm${w.eps>0?` + ${Math.round(w.eps*100)} cm hőszig.`:''}`;}
+// falszakaszok: közös szakasz egyszer (Helyiség 2-vel), a többi külső szakasz
+function wallSegments(w,rel){
+  const room=S.rooms.find(x=>x.id===w.roomId),L=wLen(w),G=wGeo(w),out=[];
+  if(w.sag){
+    let prev={x:w.x1,y:w.y1};
+    for(let i=1;i<=8;i++){
+      const cur=i===8?{x:w.x2,y:w.y2}:wPtAt(w,i/8),T=wTan(w,(i-0.5)/8),s=roomSign(w.roomId);
+      out.push({len:Math.hypot(cur.x-prev.x,cur.y-prev.y),r2:null,az:azimuth(s*T.nx,s*T.ny)});prev=cur;
+    }
+    return out;
+  }
+  const ivs=[];
+  rel.parts.forEach(e=>{
+    if(e.w!==w&&e.v!==w)return;
+    const v=e.w===w?e.v:e.w;
+    const a=(v.x1-w.x1)*G.u.x+(v.y1-w.y1)*G.u.y,b=(v.x2-w.x1)*G.u.x+(v.y2-w.y1)*G.u.y;
+    const lo=Math.max(0,Math.min(a,b)),hi=Math.min(L,Math.max(a,b));
+    if(hi-lo>0.05)ivs.push({lo,hi,own:e.w===w,r2:v.roomId});
+  });
+  const az=azimuth(G.n.x,G.n.y);
+  ivs.filter(i=>i.own).forEach(i=>out.push({len:i.hi-i.lo,r2:i.r2,az}));
+  // külső maradék = [0,L] − minden közös szakasz; falcsatlakozásba eső csonkok kimaradnak
+  const cov=ivs.map(i=>[i.lo,i.hi]).sort((a,b)=>a[0]-b[0]),free=[];let x=0;
+  cov.forEach(([lo,hi])=>{if(lo>x)free.push([x,lo]);x=Math.max(x,hi);});if(L>x)free.push([x,L]);
+  const th=thOf(w);
+  free.reverse().forEach(([lo,hi])=>{
+    if(hi-lo<0.05)return;
+    const m=(lo+hi)/2,px=w.x1+G.u.x*m+G.n.x*(th+0.15),py=w.y1+G.u.y*m+G.n.y*(th+0.15);
+    const inside=S.rooms.some(r=>r.id!==w.roomId&&ptInRoom(px,py,r))||S.walls.some(v=>v.roomId!==w.roomId&&ptInPoly(wallPoly(v),px,py));
+    if(!inside)out.unshift({len:hi-lo,r2:null,az});
+  });
+  return out;
+}
+function exportXls(){
+  const rel=detectRel(),R=n=>Math.round(n*100)/100,byId=id=>S.rooms.find(x=>x.id===id);
+  const rooms=[{0:'Típus',1:'Szint',2:'Név kóddal',5:'Magasság (m)',8:'Nettó terület (m²)',13:'Bérelhető térfogat (m³)'}];
+  S.rooms.forEach(r=>{const a=roomArea(r),sc=roomSecCalc(r),h=sc?sc.hAvg:rH(r);rooms.push({0:r.name||'',1:lvlName(lvlOf(r)),2:roomCode(r),5:R(h),8:R(a),13:R(sc?sc.vol:a*h)});}); // padlástérnél: átlagos belmagasság és a metszetből számolt térfogat
+  const ops=[{0:'Típus',1:'Altípus',3:'Helyiség 1',4:'Helyiség 2',8:'Magasság (m)',9:'Szélesség (m)',10:'Szög (°)'}];
+  S.openings.forEach(o=>{
+    const w=S.walls.find(x=>x.id===o.wallId);if(!w)return;
+    const r=byId(w.roomId),G=wGeo(w);
+    opTs(o,w).forEach(t=>{
+      // a nyílászáró túloldalán lévő helyiség (belső ajtó)
+      const p=wPtAt(w,t);let r2='';
+      partnersOf(w,rel).forEach(v=>{const V=wGeo(v),tv=((p.x-v.x1)*V.u.x+(p.y-v.y1)*V.u.y)/V.L;if(tv>=0&&tv<=1&&!r2)r2=roomCode(byId(v.roomId));});
+      ops.push({0:o.type,1:o.alt||'',3:r?roomCode(r):'',4:r2,8:R(o.oh+(o.sh||0)),9:R(o.ow),10:r2?'':azimuth(G.n.x,G.n.y)}); // belső nyílászárónál nincs tájolás
+    });
+  });
+  const walls=[{1:'Helyiség 1',2:'Helyiség 2',4:'Magasság (m)',5:'Hossz (m)',7:'Szög (°)',8:'Falak felülete (m²)',20:'Fal típusa'}];
+  S.walls.forEach(w=>{
+    if(w.fstep)return; // kiadódó helyiség lépcsője: falcsatlakozásban, nem önálló fal
+    const r=byId(w.roomId),hs=wallSecHeight(w),h=hs!=null?hs:(r?rH(r):S.b.bm);
+    wallSegments(w,rel).forEach(sg=>walls.push({1:r?roomCode(r):'',2:sg.r2?roomCode(byId(sg.r2)):'',4:R(h),5:R(sg.len),7:sg.r2?'':sg.az,8:R(sg.len*h),20:wallTypeName(w)}));
+  });
+  const blob=buildXlsx([{name:'Helyiségek',rows:rooms},{name:'Nyílászárók',rows:ops},{name:'Falak',rows:walls}]);
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`epuletfelmeres_${(S.b.addr||'').replace(/[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ]+/g,'_').slice(0,40)||'winwatt'}.xlsx`;a.click();
+}
+
+/* A4 Print */
+function groupBy(arr,keyFn){const m=new Map();arr.forEach(x=>{const k=keyFn(x);if(!m.has(k))m.set(k,[]);m.get(k).push(x);});return m;}
+function heightsTxt(){
+  const b=S.b;
+  const hs=[...new Set(S.rooms.map(r=>r2(rH(r))))];
+  if(!hs.length)hs.push(r2(b.bm));
+  // alap belmagasság elöl, utána csökkenő sorrend
+  hs.sort((a,c)=>(c===r2(b.bm))-(a===r2(b.bm))||c-a);
+  return hs;
+}
+function printBoxes(){
+  const b=S.b,N=S.rooms.length;
+  const li=a=>a.length?`<ul>${a.map(x=>`<li>${x}</li>`).join('')}</ul>`:'';
+  const note=k=>b[k]?`<div class="pn">${esc(b[k]).replace(/\n/g,'<br>')}</div>`:'';
+  const box=(title,items,noteKey,cls='')=>{
+    const body=li(items)+(noteKey?note(noteKey):'');
+    return `<div class="p-box ${cls}"><b>${title}</b>${body||'—'}</div>`;
+  };
+  const nums=rs=>rs.map(r=>roomNo(r)).join(', ');
+  // értékek felsorolása; ha több különböző van, a helyiségek sorszámával
+  const valList=k=>{
+    const g=groupBy(S.rooms.filter(r=>getV(r,k)),r=>getV(r,k));
+    const multi=g.size>1||[...g.values()].some(rs=>rs.length<N);
+    return [...g.entries()].map(([v,rs])=>esc(v)+(multi?` <span style="color:#444">(${nums(rs)})</span>`:''));
+  };
+
+  // Belmagasság
+  const hs=heightsTxt();
+  let bmHtml=`bm: <b style="display:inline;font-size:1.15em;color:#000">${hs.map(h=>hu(h)).join(' / ')}</b> m`;
+  if(hs.length>1){
+    bmHtml+=li(hs.filter(h=>h!==r2(b.bm)).map(h=>`${hu(h)} m: ${nums(S.rooms.filter(r=>r2(rH(r))===h))}`));
+  }  {const ls=levelSec(S.curLevel),P=ls&&secProfile(ls.section);
+   if(P&&!P.err)bmHtml=`bm: <b style="display:inline;font-size:1.15em;color:#000">${hu(P.H)}</b> m (padlásfödém alatt)<br>oldalfal: ${hu(P.hL)} / ${hu(P.hR)} m`;}
+
+
+  // Falazatok – csak anyagok, külső/belső
+  const rel=detectRel(),seen=new Set(),ext=[],int=[];
+  S.walls.forEach(w=>{
+    const isInt=rel.partOf.has(w);
+    const txt=`${esc(w.mat||'falazat n.a.')}, ${Math.round(thOf(w)*100)} cm${!isInt&&w.eps>0?` + ${Math.round(w.eps*100)} cm hőszig.`:''}`;
+    const k=(isInt?'b':'k')+txt;if(seen.has(k))return;seen.add(k);
+    (isInt?int:ext).push(txt);
+  });
+  const walls=ext.map(x=>'Külső: '+x).concat(int.map(x=>'Belső: '+x));
+
+  // Nyílászárók – típusok
+  const ops=[...new Set(S.openings.filter(o=>S.walls.some(w=>w.id===o.wallId)).map(o=>`${o.type}${o.alt?' – '+o.alt:''}`))]
+    .sort((a,c)=>a.localeCompare(c,'hu')).map(esc);
+
+  return `
+    <div class="p-box"><b>HRSZ.:</b>${esc(b.hrsz)||'&nbsp;'}</div>
+    <div class="p-box"><b>Dátum:</b>${esc(b.date)}</div>
+    <div class="p-box"><b>Tájolás:</b>${b.orient}°</div>
+    <div class="p-box"><b>Belmagasság (bm):</b>${bmHtml}</div>
+    <div class="p-box"><b>Padlómagasság (pm):</b>${hu(b.pm)} m</div>
+    ${box('Falazat:',walls,'wallNote')}
+    ${box('Födém:',valList('slab'),'slabNote')}
+    ${box('Padló:',valList('floor'))}
+    ${box('Nyílászárók:',ops,'winNote')}
+    ${box('Fűtés:',valList('heat'),'heatNote')}
+    ${box('HMV:',valList('dhw'),'dhwNote')}
+    ${box('Világítás:',valList('light'),'lightNote')}
+    ${box('Megújuló:',valList('ren'),'pvNote')}
+    ${(()=>{const l=levelSec(S.curLevel);return l?`<div class="p-box"><b>Padlástér metszet:</b>${sectionSvg(l,'100%','30mm',true)}${secSummaryHtml(l)}</div>`:'';})()}
+    <div class="p-box p-sec"><b>Megjegyzés:</b>${note('note')}</div>`;
+}
+function setPage(land){
+  $('#pageStyle').textContent=`@page{size:A4 ${land?'landscape':'portrait'};margin:0}`;
+  const pa=$('#printArea');pa.style.width=land?'297mm':'210mm';pa.style.height=land?'210mm':'297mm';
+}
+function buildPrint(){withLevel(S.curLevel,_buildPrint);}
+function _buildPrint(){
+  printWide=false;setPage(false);
+  const B=bounds()||{minX:0,maxX:10,minY:0,maxY:10};
+  const pad=showOverall?2.3:1.5,vb=`${B.minX-pad} ${B.minY-pad} ${(B.maxX-B.minX)+pad*2} ${(B.maxY-B.minY)+pad*2}`;
+  const b=S.b,tot=S.rooms.reduce((a,r)=>a+roomArea(r),0);
+  const pa=$('#printArea');
+  pa.innerHTML=`
+    <div class="p-left">
+      <div class="p-cust"><b>Megrendelő:</b> ${esc(b.cust)}</div>
+      <div class="p-prop"><b>Ingatlan címe:</b> ${esc(b.addr)}${S.levels.length>1?` &nbsp;·&nbsp; <b>Szint:</b> ${esc(curLvl().name)}`:''}</div>
+      <div class="p-plan"><svg id="printSvg" xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" style="width:100%;height:100%"></svg>
+        <div class="p-legend">${hatchLegend()}<br>Kotta: belméretek [m] · falvastagság [cm] · zárójelben a helyiségek sorszáma</div></div>
+    </div>
+    <div class="p-right">${printBoxes()}</div>`;
+  render($('#printSvg'),true);
+  // a jobb oszlop betűméretét addig csökkentjük, amíg minden kifér
+  pa.classList.add('measure');
+  const rc=pa.querySelector('.p-right');let fz=7.5;
+  rc.style.fontSize=fz+'pt';
+  while(rc.scrollHeight>rc.clientHeight+1&&fz>4.5){fz-=0.25;rc.style.fontSize=fz+'pt';}
+  pa.classList.remove('measure');
+}
+function printA4(){
+  buildPrint();
+  setTimeout(()=>window.print(),120);
+}
+// Csak rajz: adminisztratív fejléc + teljes lapos, középre igazított rajz, tágasabb kottával; tájolás a rajz arányához
+function buildPlanPrint(){withLevel(S.curLevel,_buildPlanPrint);}
+function _buildPlanPrint(){
+  const B=bounds()||{minX:0,maxX:10,minY:0,maxY:10};
+  const pad=showOverall?2.9:2.0,bw=(B.maxX-B.minX)+pad*2,bh=(B.maxY-B.minY)+pad*2;
+  const land=bw>bh*1.08;
+  printWide=true;setPage(land);
+  const vb=`${B.minX-pad} ${B.minY-pad} ${bw} ${bh}`,b=S.b;
+  $('#printArea').innerHTML=`
+    <div class="pp-wrap">
+      <div class="pp-head">
+        <div><b>Megrendelő:</b>${esc(b.cust)||'&nbsp;'}</div>
+        <div><b>Ingatlan címe:</b>${esc(b.addr)||'&nbsp;'}</div>
+        <div><b>HRSZ.:</b>${esc(b.hrsz)||'&nbsp;'}</div>
+        <div><b>Dátum:</b>${esc(b.date)||'&nbsp;'}</div>
+        ${S.levels.length>1?`<div><b>Szint:</b>${esc(curLvl().name)}</div>`:''}
+      </div>
+      <div class="pp-plan"><svg id="printSvg" xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" style="${levelSec(S.curLevel)?(land?'width:calc(100% - 78mm);height:100%':'width:100%;height:calc(100% - 62mm)'):'width:100%;height:100%'}"></svg>
+        <div class="p-legend">${hatchLegend()}<br>Kotta: belméretek [m] · falvastagság [cm]</div>
+        ${(()=>{const l=levelSec(S.curLevel);return l?`<div class="p-secbox"><b>Padlástér metszet</b>${sectionSvg(l,'100%','32mm',true)}${secSummaryHtml(l)}</div>`:'';})()}</div>
+    </div>`;
+  render($('#printSvg'),true);
+  printWide=false;
+}
+function printPlan(){
+  buildPlanPrint();
+  setTimeout(()=>window.print(),120);
+}
+/* Actions, Menus, Bluetooth DISTO */
+function updateTopInfo(){$('#topInfo').textContent=`Rajzolási fal: ${Math.round((S.b.defTh||0.12)*100)} cm · Lépték 1:${S.b.scale}`;}
+const acts={
+  newDoc(){if(confirm('Új üres felmérés?')){snapshot();S=defState();selWalls.clear();selRoom=null;selOp=null;save();render();panel();}},
+  saveJson(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download='epuletfelmeres.json';a.click();},
+  loadJson(){$('#fileIn').click();},
+  exportXls,printA4,printPlan,undo,redo,
+  delSel(){
+    if(selOp){snapshot();S.openings=S.openings.filter(x=>x.id!==selOp);selOp=null;}
+    else if(selWalls.size){snapshot();S.walls=S.walls.filter(w=>!selWalls.has(w.id));S.openings=S.openings.filter(o=>!selWalls.has(o.wallId));selWalls.clear();}
+    save();render();panel();
+  },
+  zoomIn(){view.w=Math.max(3,view.w*0.8);render();},
+  zoomOut(){view.w=Math.min(80,view.w*1.25);render();},
+  fitLevel(){fitLevel();},
+  levels(){openLevelsModal();},
+  fitView(){
+    if(!S.walls.length){view={x:-2,y:-2,w:18,h:12};render();return;}
+    const B=bounds();
+    view.x=B.minX-1.6;view.y=B.minY-1.6;view.w=Math.max(6,(B.maxX-B.minX)+3.2);render();
+  },
+  toggleGrid(){$('#chkGrid').checked=!$('#chkGrid').checked;render();},
+  toggleDim(){$('#chkDim').checked=!$('#chkDim').checked;render();},
+  distoLog(){const txt=distoLogA.length?distoLogA.join('\n'):'(üres – csatlakozz a DISTO gombbal)';const m=$('#modal');m.innerHTML=`<h3><span>DISTO napló</span><button class="btn" id="mClose">✕</button></h3><textarea readonly style="width:100%;height:300px;font:11px monospace">${esc(txt)}</textarea><p class="muted">Ha a mérésindítás nem működik, másold ki és küldd el ezt a szöveget.</p>`;$('#modalWrap').classList.add('open');$('#mClose').onclick=()=>$('#modalWrap').classList.remove('open');},
+  distoCmd(){const v=prompt('DISTO mérésindító parancs (a 3ab10109 parancs-csatornára küldve; alapértelmezés: g):',S.b.distoCmd||'g');if(v!==null){S.b.distoCmd=v||'g';save();}},
+  defTh10(){S.b.defTh=0.10;save();updateTopInfo();},
+  defTh12(){S.b.defTh=0.12;save();updateTopInfo();},
+  defTh30(){S.b.defTh=0.30;save();updateTopInfo();},
+  defTh38(){S.b.defTh=0.38;save();updateTopInfo();},
+  toggleOverall(){showOverall=!showOverall;render();},
+  selExt(){selWalls=new Set(exteriorWalls().map(w=>w.id));selRoom=null;selOp=null;tab='props';syncTabs();render();panel();},
+  selInt(){const ext=new Set(exteriorWalls());selWalls=new Set(S.walls.filter(w=>!ext.has(w)).map(w=>w.id));selRoom=null;selOp=null;tab='props';syncTabs();render();panel();},
+  clearPins(){if(!(S.pins||[]).length){alert('Nincs kézi homlokzat-igazítás.');return;}if(confirm(`${S.pins.length} homlokzat-igazítás törlése?`)){snapshot();S.pins=[];save();render();}},
+  selAll(){selWalls=new Set(S.walls.map(w=>w.id));selRoom=null;selOp=null;tab='props';syncTabs();render();panel();},
+  scale50(){S.b.scale=50;save();updateTopInfo();},
+  scale100(){S.b.scale=100;save();updateTopInfo();},
+  scale200(){S.b.scale=200;save();updateTopInfo();}
+};
+$('#fileIn').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(!p||!Array.isArray(p.walls))throw 0;snapshot();S=normalize(p);selWalls.clear();selRoom=null;selOp=null;save();render();panel();}catch{alert('Hibás JSON fájl');}};rd.readAsText(f);
+};
+$$('.mi').forEach(m=>m.onclick=e=>{e.stopPropagation();const o=m.classList.contains('open');closePops();if(!o)m.classList.add('open');});
+window.addEventListener('click',closePops);
+$$('[data-act]').forEach(b=>b.onclick=e=>{e.stopPropagation();closePops();acts[b.dataset.act]?.();});
+$$('[data-tool]').forEach(b=>b.onclick=()=>{
+  setTool(b.dataset.tool);
+});
+function syncTabs(){$$('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));}
+$$('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;syncTabs();panel();});
+$('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
+$('#chkGrid').onchange=$('#gridStep').onchange=$('#chkDim').onchange=()=>render();
+
+$('#btnApplyDist').onclick=()=>{
+  const v=parseFloat($('#distVal').value);if(!(v>0))return;
+  if(selWalls.size===1){
+    const w=S.walls.find(x=>selWalls.has(x.id));if(!w)return;
+    snapshot();setWallLength(w,v);
+    save();render();panel();
+  }else if(draft.length>=1){
+    const p=draft[draft.length-1];draft.push({x:r3(p.x+v),y:p.y});render();
+  }
+};
+/* ===== DISTO =====
+   BLE (app) mód: a távolság a 3ab10101 csatornán érkezik; mérés indítása a 3ab10109 parancs-csatornára küldött
+   karakterrel (alapból "g"). Billentyűzet (HID) módban a DISTO begépeli az értéket – mérés módban ezt is elkapjuk. */
+const DISTO_SVC='3ab10100-f831-4395-b29d-570977d5bf94',DISTO_DIST='3ab10101-f831-4395-b29d-570977d5bf94',DISTO_CMD='3ab10109-f831-4395-b29d-570977d5bf94';
+let distoCmdChar=null,measureMode=false,lastDistoId=null,kbBuf='',measWait=null;
+// napló a DISTO-kapcsolathoz (Beállítások → DISTO napló): eszköznév, csatornák, beérkező adatok, hibák
+const distoLogA=[];
+function dlog(m){distoLogA.push(new Date().toLocaleTimeString('hu-HU')+' '+m);if(distoLogA.length>80)distoLogA.shift();}
+const hex=dv=>[...new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength)].map(b=>b.toString(16).padStart(2,'0')).join(' ');
+document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-disto]'))lastDistoId=e.target.id;});
+function distoFields(el){const box=(el&&el.closest('#modal,#panel'))||document;return [...box.querySelectorAll('input[data-disto]')];}
+function targetLabel(el){
+  if(!el)return 'Nincs kiválasztott mező → a mérés a felső „m” mezőbe kerül';
+  const lab=el.closest('.row')&&el.closest('.row').querySelector('label');
+  const ttl=(el.closest('#modal')&&$('#modal h3 span'))||($('#panel h4'));
+  return `Cél: ${ttl?ttl.textContent+' – ':''}${lab?lab.textContent:el.id}`;
+}
+function curTarget(){return lastDistoId&&document.getElementById(lastDistoId);}
+function updMeasOv(){
+  $('#moTarget').textContent=targetLabel(curTarget());
+  $('#moStat').textContent=distoChar?(distoCmdChar?'DISTO csatlakozva':'DISTO csatlakozva (indítás csak a műszeren)'):'nincs BLE kapcsolat – billentyűzet módú DISTO vagy kézi DIST gomb';
+}
+function onDisto(val){
+  if(measureMode){
+    clearTimeout(measWait);$('#measOv').classList.remove('busy');
+    $('#moVal').textContent=hu(val,3,true)+' m';
+    const el=curTarget();
+    if(el){
+      const list=distoFields(el),i=list.indexOf(el),nextId=list[i+1]?list[i+1].id:null;
+      el.value=val.toFixed(2);el.dispatchEvent(new Event('change',{bubbles:true}));
+      if(nextId&&document.getElementById(nextId))lastDistoId=nextId;
+    }else $('#distVal').value=val.toFixed(3);
+    $('#moHint').textContent='Érintsd meg a képernyőt a következő méréshez';
+    updMeasOv();return;
+  }
+  const ae=document.activeElement;
+  if(ae&&ae.matches&&ae.matches('input[data-disto]')){
+    const list=distoFields(ae),i=list.indexOf(ae);
+    const nextId=list[i+1]?list[i+1].id:null;
+    ae.value=val.toFixed(2);
+    ae.dispatchEvent(new Event('change',{bubbles:true}));
+    if(nextId){const n=document.getElementById(nextId);if(n){n.focus();n.select&&n.select();}}
+  }else $('#distVal').value=val.toFixed(3);
+}
+async function distoTrigger(){
+  if(!distoCmdChar){
+    $('#moHint').textContent=distoChar?'Ez a DISTO nem fogad indító parancsot – nyomd meg a DIST gombot a műszeren':'Nyomd meg a DIST gombot a műszeren (vagy csatlakoztasd a DISTO gombbal)';
+    return;
+  }
+  try{
+    const data=new TextEncoder().encode(S.b.distoCmd||'g');dlog('Indító parancs küldése: "'+(S.b.distoCmd||'g')+'"');
+    if(distoCmdChar.writeValueWithResponse)await distoCmdChar.writeValueWithResponse(data);else await distoCmdChar.writeValue(data);
+    $('#measOv').classList.add('busy');$('#moHint').textContent='Mérés…';
+    clearTimeout(measWait);measWait=setTimeout(()=>{$('#measOv').classList.remove('busy');$('#moHint').textContent='Nem jött mérés – próbáld újra, vagy nyomd meg a DIST gombot';},6000);
+  }catch(err){dlog('Indítás hiba: '+err.message);$('#moHint').textContent='Indítás sikertelen ('+err.message+') – nyomd meg a DIST gombot';}
+}
+function startMeasure(){
+  measureMode=true;kbBuf='';$('#measOv').classList.add('on');$('#btnMeas').classList.add('active');
+  $('#moVal').textContent='—';$('#moHint').textContent=distoCmdChar?'Érintsd meg a képernyőt a méréshez':'Mérj a DISTO-val (DIST gomb)';
+  updMeasOv();
+}
+function stopMeasure(){measureMode=false;$('#measOv').classList.remove('on','busy');$('#btnMeas').classList.remove('active');}
+$('#btnMeas').onclick=()=>measureMode?stopMeasure():startMeasure();
+$('#measOv').addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;e.preventDefault();distoTrigger();});
+$('#moExit').onclick=e=>{e.stopPropagation();stopMeasure();};
+const moStep=d=>{const el=curTarget(),list=distoFields(el);if(!list.length)return;let i=list.indexOf(el);i=i<0?0:Math.max(0,Math.min(list.length-1,i+d));lastDistoId=list[i].id;updMeasOv();};
+$('#moPrev').onclick=e=>{e.stopPropagation();moStep(-1);};
+$('#moNext').onclick=e=>{e.stopPropagation();moStep(1);};
+// billentyűzet (HID) módú DISTO: a begépelt szám + Enter mérés módban mérésnek számít
+window.addEventListener('keydown',e=>{
+  if(!measureMode)return;
+  if(/^[0-9.,]$/.test(e.key)){kbBuf+=e.key;e.preventDefault();e.stopPropagation();return;}
+  if((e.key==='Enter'||e.key==='Tab')&&kbBuf){const v=parseFloat(kbBuf.replace(',','.'));kbBuf='';e.preventDefault();e.stopPropagation();if(Number.isFinite(v))onDisto(v);return;}
+  if(e.key==='Escape'){stopMeasure();e.preventDefault();e.stopPropagation();}
+},true);
+$('#btnDisto').onclick=async()=>{
+  if(!navigator.bluetooth){alert('Ebben a böngészőben nincs Web Bluetooth. Chrome vagy Edge kell (Windows, Android). iPad/iPhone Safari nem támogatja – ott a DISTO billentyűzet módja használható a Mérés móddal.');return;}
+  try{
+    const dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'DISTO'},{services:[DISTO_SVC]}],optionalServices:[DISTO_SVC]});
+    dlog('Eszköz: '+(dev.name||'(név nélkül)'));
+    const srv=await dev.gatt.connect();dlog('GATT csatlakozva');
+    const svc=await srv.getPrimaryService(DISTO_SVC);
+    try{const cs=await svc.getCharacteristics();dlog('Csatornák: '+cs.map(c=>c.uuid.slice(4,8)+'['+(c.properties.notify?'N':'')+(c.properties.indicate?'I':'')+(c.properties.write?'W':'')+(c.properties.writeWithoutResponse?'w':'')+']').join(' '));}catch(e){dlog('Csatornalista hiba: '+e.message);}
+    distoChar=await svc.getCharacteristic(DISTO_DIST);
+    await distoChar.startNotifications();
+    distoChar.addEventListener('characteristicvaluechanged',ev=>{
+      const dv=ev.target.value;dlog('Adat: '+hex(dv)+(dv.byteLength>=4?' = '+dv.getFloat32(0,true).toFixed(4):''));if(dv.byteLength<4)return;
+      const val=dv.getFloat32(0,true);
+      if(Number.isFinite(val)&&val>0)onDisto(val);
+    });
+    try{distoCmdChar=await svc.getCharacteristic(DISTO_CMD);dlog('Parancs-csatorna megvan (3ab10109)');}catch(e){distoCmdChar=null;dlog('Nincs parancs-csatorna: '+e.message);}
+    dev.addEventListener('gattserverdisconnected',()=>{dlog('Kapcsolat megszakadt');distoChar=null;distoCmdChar=null;$('#btnDisto').classList.remove('active');if(measureMode)updMeasOv();});
+    $('#btnDisto').classList.add('active');
+    if(measureMode)updMeasOv();
+  }catch(err){
+    dlog('Csatlakozási hiba: '+err.message);
+    alert('DISTO csatlakozás sikertelen: '+err.message+'\n\nEllenőrizd: Bluetooth bekapcsolva a műszeren, nincs más alkalmazáshoz (pl. Windows billentyűzetként vagy DISTO Plan apphoz) csatlakozva, és a Bluetooth mód nem „billentyűzet” (HID).');
+  }
+};
+
+svg.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('keyup',e=>{if(e.code==='Space'){spaceDown=false;svg.style.cursor=tool==='select'?'default':tool==='pan'?'grab':'crosshair';}});
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){if(!spaceDown){spaceDown=true;svg.style.cursor='grab';}e.preventDefault();return;}
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();}
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();}
+  if(e.key==='Delete'||e.key==='Backspace')acts.delSel();
+  if(e.key==='Escape'){draft=[];guides=[];hoverPt=null;stopPaint();render();}
+});
+window.addEventListener('resize',()=>render());
+
+try{fitFlexRooms();}catch(e){}
+// internet nélküli működés, ha webcímről (HTTPS) fut – pl. GitHub Pages + Bluefy
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+updateTopInfo();updateUndoBtns();updateLevelBtn();render();panel();
+$('#btnLevel').onclick=openLevelsModal;$('#chkGhost').onchange=()=>render();
+})();
+</script>
+</body>
+</html>
