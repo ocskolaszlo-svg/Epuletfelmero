@@ -2412,11 +2412,11 @@ function exportXls(){
     walls.push({1:sg.r?roomCode(sg.r):'',2:sg.r2?roomCode(byId(sg.r2)):'',4:R(sg.h),5:R(sg.len),6:sg.ext?egtaj(sg.az):'belső',7:sg.ext?sg.az:'',8:R(net),9:R(gross),10:op?R(op):'',20:wallTypeName(sg.w)});
   });
   // vízszintes/ferde határolók a lap végén, helyiségenként: padló, födém (padlásfödém), tető
-  // WinWatt: padlónál x (Hossz) = a külső fal élhossza, A = teljes felület; födémnél/tetőnél x = felület, y (Magasság) = 1 szorzó
+  // WinWatt: padlónál x (Hossz) = a külső fal élhossza, y (Magasság) = terület/élhossz, így x·y = teljes felület (a WinWatt csak y-nal együtt veszi át az x-et); födémnél/tetőnél x = felület, y (Magasság) = 1 szorzó
   S.rooms.forEach(r=>{
     const code=roomCode(r),a=roomArea(r);
     const edge=segs.filter(sg=>sg.r===r&&sg.ext).reduce((s,sg)=>s+sg.len,0); // padló külső élhossza (belméret)
-    walls.push({1:code,5:R(edge),6:'padló',8:R(a),20:`Padló – ${r.floor||'n.a.'}`});
+    walls.push({1:code,...(edge>0.01?{4:Math.round(R(a)/R(edge)*1e6)/1e6,5:R(edge)}:{}),6:'padló',8:R(a),20:`Padló – ${r.floor||'n.a.'}`});
     const l=levelSec(lvlOf(r)),P=l&&secProfile(l.section);
     if(P&&!P.err){
       const poly=roomPoly(r),o=secOrigin(l),ax=P.axis,p=P.pts;
