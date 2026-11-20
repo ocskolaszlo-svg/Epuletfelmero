@@ -56,6 +56,9 @@ button{cursor:pointer}
 #main{display:flex;flex:1;min-height:0}
 #wrap{position:relative;flex:1;min-width:0;overflow:hidden;background:#17191b}
 #plan{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+#numBanner{display:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;background:#7c2d12f0;border:1px solid #fb923c;border-radius:8px;padding:6px 10px;gap:8px;align-items:center;font-size:13px;color:#fff}
+#numBanner.on{display:flex}
+#numBanner button{background:#374151;color:#fff;border:1px solid #6b7280;border-radius:6px;padding:4px 10px}
 #segBox{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:5;display:flex;gap:5px;align-items:center;flex-wrap:wrap;background:#111827ee;border:1px solid #3b82f6;border-radius:8px;padding:6px 8px;font-size:12px;max-width:calc(100% - 20px)}
 #segBox input{width:80px}
 #badge{position:absolute;left:10px;bottom:10px;pointer-events:none;background:#111c;border:1px solid #555;border-radius:5px;padding:5px 8px;color:#cbd5e1;font-size:11px;max-width:calc(100% - 20px)}
@@ -227,8 +230,8 @@ textarea{resize:vertical}
     <div class="g">
       <button class="tb chip" data-pal="Ablak">Ablak</button>
       <button class="tb chip" data-pal="Ajtó">Ajtó</button>
-      <button class="tb chip" data-pal="Erkélyajtó">Erkélyajtó</button>
       <button class="tb chip" data-pal="Átjáró" title="Szárny nélküli nyílás két helyiség között">Átjáró</button>
+      <button class="tb" id="btnNum" title="Helyiségek újraszámozása: koppints rájuk a kívánt sorrendben">№ Számozás</button>
       <span class="pop-wrap">
         <button id="btnFreqOp" class="tb" title="Gyakori / előző nyílászárók">☰</button>
         <div id="popFreqOp" class="pop"></div>
@@ -275,6 +278,7 @@ textarea{resize:vertical}
         <button id="paintAll">Összes helyiség</button>
         <button id="paintStop">Kész</button>
       </div>
+      <div id="numBanner"><span id="numTxt"></span><button id="numUndo">↶</button><button id="numStop">Kész</button></div>
       <div id="segBox" style="display:none">
         <span id="segTxt">Szakasz</span>
         <input id="segLen" data-disto type="text" inputmode="none" autocomplete="off" placeholder="hossz" title="Valós hossz (m) – DISTO-val is">
@@ -1216,6 +1220,31 @@ function hidePad(){if(padEl)padEl.classList.remove('on');}
 document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-disto]')){clearTimeout(padTimer);padFresh=true;showPad();}});
 document.addEventListener('focusout',e=>{if(e.target.matches&&e.target.matches('input[data-disto]'))padTimer=setTimeout(()=>{if(!padTarget())hidePad();},150);});
 
+/* Helyiségek újraszámozása: a koppintás sorrendje adja az új sorszámot (1, 2, 3…), a többi utána, eredeti sorrendben */
+let numMode=null;
+function numUpd(){
+  $('#numTxt').textContent=`Számozás: koppints a helyiségekre a kívánt sorrendben – következő: ${numMode.order.length+1}.`;
+}
+function numStart(){
+  if(!S.rooms.length){alert('Még nincs helyiség.');return;}
+  stopPaint&&stopPaint();snapshot();
+  numMode={order:[],orig:S.rooms.slice()};
+  $('#numBanner').classList.add('on');$('#btnNum').classList.add('active');numUpd();
+}
+function numApply(){
+  const first=numMode.order.map(id=>S.rooms.find(r=>r.id===id)).filter(Boolean);
+  S.rooms=first.concat(numMode.orig.filter(r=>!numMode.order.includes(r.id)));
+  save();render();panel();numUpd();
+}
+function numTap(r){if(numMode.order.includes(r.id))return;numMode.order.push(r.id);numApply();}
+function numStop(){numMode=null;$('#numBanner').classList.remove('on');$('#btnNum').classList.remove('active');render();panel();}
+// padló élhossza: a helyiség külső falainak belső hossza (WinWatt-ba kézzel, a talajon fekvő padló „x” mezőjébe)
+function floorEdge(r,rel){
+  rel=rel||detectRel();let s=0;
+  roomWalls(r).forEach(w=>{if(w.fstep)return;wallSegments(w,rel).forEach(sg=>{if(!sg.r2)s+=sg.len;});});
+  return s;
+}
+
 /* Snap & CAD */
 function clientToWorld(cx,cy){
   const rect=svg.getBoundingClientRect();
@@ -1758,6 +1787,11 @@ svg.addEventListener('pointerdown',e=>{
   const raw=clientToWorld(e.clientX,e.clientY);
 
   // Paint Floor / Slab mode
+  if(numMode){
+    const hitR=S.rooms.find(r=>ptInRoom(raw.x,raw.y,r));
+    if(hitR)numTap(hitR);
+    return;
+  }
   if(paintMode){
     const hitR=S.rooms.find(r=>ptInRoom(raw.x,raw.y,r));
     if(hitR){
@@ -2036,6 +2070,7 @@ function openOpModal(o){
   const ra=recentAlts(o.type),all=altOpts(o.type).filter(a=>!ra.includes(a));
   if(o.alt&&!ra.includes(o.alt)&&!all.includes(o.alt))all.push(o.alt);
   m.innerHTML=`<h3><span>${esc(o.type)} méretezése</span><button class="btn" id="mClose">✕</button></h3>
+    <div class="row"><label>Típus</label><select id="mType" style="flex:1">${['Ablak','Ajtó','Erkélyajtó','Átjáró'].map(x=>`<option ${x===o.type?'selected':''}>${x}</option>`).join('')}</select></div>
     <div class="row"><label>Méret (sz×m)</label><span style="display:flex;gap:4px;flex-wrap:wrap;flex:1">${top.map((f,i)=>`<button class="btn sztile" data-ti="${i}">${shortNum(f.ow)}x${shortNum(f.oh)}${f.sh?'<small>+r</small>':''}</button>`).join('')}${rest.length?`<select id="mFreq" style="width:auto"><option value="">…</option>${rest.map((f,i)=>`<option value="${i+6}">${shortNum(f.ow)}x${shortNum(f.oh)}</option>`).join('')}</select>`:''}</span></div>
     ${pass?'':`<div class="row"><label>Altípus</label><select id="mAltSel" style="flex:1"><option value="">—</option>${ra.length?`<optgroup label="Legutóbbi">${ra.map(a=>`<option ${a===o.alt?'selected':''}>${esc(a)}</option>`).join('')}</optgroup><optgroup label="Mind">`:''}${all.map(a=>`<option ${a===o.alt?'selected':''}>${esc(a)}</option>`).join('')}${ra.length?'</optgroup>':''}<option value="__x">Egyéb (beírom)…</option></select></div>`}
     <div class="row"><label>Szélesség (m)</label><input id="mW" data-disto type="text" inputmode="none" autocomplete="off" value="${o.ow}"></div>
@@ -2050,6 +2085,7 @@ function openOpModal(o){
     </div>`;
   $('#modalWrap').classList.add('open');
   $('#mClose').onclick=()=>$('#modalWrap').classList.remove('open');
+  $('#mType').onchange=e=>{snapshot();o.type=e.target.value;if(o.type==='Átjáró'){o.sh=0;o.pm=0;o.alt='';}const f=sizeTiles(o.type)[0];if(f&&!S.openings.some(x=>x!==o&&x.type===o.type)){o.ow=f.ow;o.oh=f.oh;o.pm=f.pm||0;o.sh=f.sh||0;}save();render();openOpModal(o);};
   const useTile=f=>{if(!f)return;$('#mW').value=f.ow;$('#mH').value=f.oh;if(!pass){$('#mPm').value=f.pm||0;$('#mShOn').checked=f.sh>0;$('#mSh').disabled=!(f.sh>0);if(f.sh>0)$('#mSh').value=f.sh;}
     m.querySelectorAll('.sztile').forEach(b=>b.classList.toggle('active',+b.dataset.ti===tiles.indexOf(f)));};
   m.querySelectorAll('.sztile').forEach(b=>b.onclick=()=>useTile(tiles[+b.dataset.ti]));
@@ -2146,8 +2182,9 @@ function panel(){
   const p=$('#panel');
   if(tab==='rooms'){
     const tot=S.rooms.reduce((a,r)=>a+roomArea(r),0);
-    p.innerHTML=`<h4>Helyiségek (${S.rooms.length}) · nettó ${hu(tot,2,true)} m²</h4><table><tr><th>Név</th><th>m²</th><th>bm</th><th>Padló / Födém</th><th>Gépészet</th></tr>`+
-      S.rooms.map(r=>`<tr class="${r.id===selRoom?'selrow':''}" data-rid="${r.id}"><td>${roomNo(r)}. ${esc(r.name)}</td><td>${hu(roomArea(r),2,true)}</td><td>${hu(rH(r))}</td><td class="muted">${esc([r.floor,r.slab].filter(Boolean).join(', ')||'—')}</td><td class="muted">${esc(SYS_KEYS.map(k=>getV(r,k)).filter(Boolean).join(', ')||'—')}</td></tr>`).join('')+`</table>`;
+    const relT=detectRel();
+    p.innerHTML=`<h4>Helyiségek (${S.rooms.length}) · nettó ${hu(tot,2,true)} m²</h4><table><tr><th>Név</th><th>m²</th><th>bm</th><th>Padló élh.</th><th>Padló / Födém</th><th>Gépészet</th></tr>`+
+      S.rooms.map(r=>`<tr class="${r.id===selRoom?'selrow':''}" data-rid="${r.id}"><td>${roomNo(r)}. ${esc(r.name)}</td><td>${hu(roomArea(r),2,true)}</td><td>${hu(rH(r))}</td><td>${hu(floorEdge(r,relT),2,true)}</td><td class="muted">${esc([r.floor,r.slab].filter(Boolean).join(', ')||'—')}</td><td class="muted">${esc(SYS_KEYS.map(k=>getV(r,k)).filter(Boolean).join(', ')||'—')}</td></tr>`).join('')+`</table>`;
     p.querySelectorAll('tr[data-rid]').forEach(tr=>tr.onclick=()=>{selRoom=tr.dataset.rid;selWalls.clear();selOp=null;render();panel();});
     return;
   }
@@ -2212,6 +2249,7 @@ function panel(){
       <div class="row"><label>Név / funkció</label><input id="rName" list="dl_func" value="${esc(r.name)}"><datalist id="dl_func">${catOpts('func').map(v=>`<option value="${esc(v.charAt(0).toUpperCase()+v.slice(1))}">`).join('')}</datalist></div>
       <div class="row"><label>Típus</label><select id="rType">${['Fűtött','Fűtetlen','Pince','Kültér'].map(t=>`<option ${r.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
       ${(()=>{const sc=roomSecCalc(r);return sc?`<p class="muted" style="color:#fbbf24">Padlástér: teljes ${hu(sc.area,2,true)} m² · 1,90 m feletti ${hu(sc.area19,2,true)} m² · térfogat ${hu(sc.vol,1,true)} m³ · átl. bm ${hu(sc.hAvg,2,true)} m</p>`:'';})()}
+      <p class="muted">Padló élhossza (külső falak, belméret): <b>${hu(floorEdge(r),2,true)} m</b></p>
       <div class="row"><button class="btn" id="rSec">Padlástér metszet (${esc(lvlName(lvlOf(r)))})…</button></div>
       <div class="row"><label>Kiadódó</label><label class="chk" style="flex:1"><input id="rFlex" type="checkbox" ${r.flex?'checked':''}> méretét a szomszédok adják</label></div>
       ${r.flex?'<p class="muted">Kiadódó helyiség: falai a szomszéd helyiségek falaihoz és a homlokzat vonalához igazodnak; itt gyűlnek össze a mérési/építési pontatlanságok. Kottája zárójelben.</p>':''}
@@ -2770,6 +2808,9 @@ try{fitFlexRooms();}catch(e){}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 updateTopInfo();updateUndoBtns();updateLevelBtn();render();panel();
 $('#btnLevel').onclick=openLevelsModal;
+$('#btnNum').onclick=()=>numMode?numStop():numStart();
+$('#numStop').onclick=numStop;
+$('#numUndo').onclick=()=>{if(!numMode||!numMode.order.length)return;numMode.order.pop();numApply();};
 $('#segApply').onclick=()=>applySegLen(parseFloat($('#segLen').value));
 $('#segLen').addEventListener('keydown',e=>{if(e.key==='Enter'){applySegLen(parseFloat($('#segLen').value));e.preventDefault();}});
 $('#segLen').addEventListener('change',e=>{if(e.isTrusted===false)applySegLen(parseFloat($('#segLen').value));});
