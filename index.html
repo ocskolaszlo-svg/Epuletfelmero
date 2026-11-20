@@ -166,6 +166,7 @@ textarea{resize:vertical}
         <button data-act="loadJson">Betöltés (.json)</button>
         <hr>
         <button data-act="exportXls">Excel export WinWatt-hoz (.xlsx)</button>
+        <button data-act="toggleExpInt" id="mnExpInt">Belső szerkezetek exportja: be</button>
         <button data-act="printA4">Felmérési lap nyomtatás (A4)</button>
         <button data-act="printPlan">Csak rajz nyomtatás / PDF (A4, fejléccel)</button>
       </span>
@@ -404,6 +405,7 @@ function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 function uid(){return Math.random().toString(36).slice(2,9);}
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function r2(n){return Math.round(n*100)/100;}
+const pf=v=>parseFloat(String(v??'').replace(',','.')); // tizedesvessző is elfogadva
 function r3(n){return Math.round(n*1000)/1000;}
 // magyar számformátum: hu(2.70)="2,7", hu(4.2,2,true)="4,20"
 function hu(n,d=2,fixed=false){
@@ -1118,7 +1120,7 @@ function openSectionModal(){
     </div>`;
   $('#modalWrap').classList.add('open');
   const close=()=>{$('#modalWrap').classList.remove('open');m.classList.remove('wide');render();panel();};
-  const read=()=>{const s={axis:$('#sc_axis').value,sym:$('#sc_sym').checked};['W','hL','sL','c','sR','hR','H'].forEach(k=>{const v=$('#sc_'+k).value;s[k]=v===''?'':parseFloat(v);});return s;};
+  const read=()=>{const s={axis:$('#sc_axis').value,sym:$('#sc_sym').checked};['W','hL','sL','c','sR','hR','H'].forEach(k=>{const v=$('#sc_'+k).value;s[k]=v===''?'':pf(v);});return s;};
   const prev=()=>{
     const s=read(),old=l.section;l.section=s;secCache.clear();
     const P=secProfile(s);
@@ -1262,7 +1264,7 @@ function snapPt(raw,lastPt){
   guides=[];cadPt=null;
   let x=raw.x,y=raw.y;
   const useGrid=$('#chkGrid').checked;
-  const step=parseFloat($('#gridStep').value)||0.1;
+  const step=pf($('#gridStep').value)||0.1;
   const useCad=$('#chkCad').checked;
   const tol=view.w*0.018;
 
@@ -1384,7 +1386,7 @@ function openRectModal(r,isNew){
   $('#mOk').onclick=()=>{
     if(!isNew)snapshot();
     r.name=$('#rmName').value.trim()||r.name;{const f=FUNCS.find(x=>x.toLowerCase()===r.name.toLowerCase());if(f)r.func=f;}
-    const W=parseFloat($('#rmW').value),H=parseFloat($('#rmH').value);
+    const W=pf($('#rmW').value),H=pf($('#rmH').value);
     const fixed=isNew?new Set(S.rooms.filter(x=>x.id!==r.id).map(x=>x.id)):new Set([r.id]);
     resizeRect(r,W,H,fixed.size?fixed:new Set([r.id]));
     close();save();render();panel();
@@ -1471,7 +1473,7 @@ function render(targetSvg=svg,isPrint=false){
   // Grid
   if(!isPrint && $('#chkGrid').checked){
     const gG=el('g',{},targetSvg);
-    const step=parseFloat($('#gridStep').value)||0.1;
+    const step=pf($('#gridStep').value)||0.1;
     const x0=Math.floor(view.x/step)*step,x1=view.x+view.w;
     const y0=Math.floor(view.y/step)*step,y1=view.y+view.h;
     if((x1-x0)/step<260){
@@ -1930,7 +1932,7 @@ window.addEventListener('pointermove',e=>{
   if(drag.kind==='wallMove'){
     if(!drag.moved&&Math.hypot(raw.x-drag.sx,raw.y-drag.sy)<0.04)return;
     if(!drag.moved){snapshot();drag.moved=true;}
-    const step=$('#chkGrid').checked?(parseFloat($('#gridStep').value)||0.1):0.01;
+    const step=$('#chkGrid').checked?(pf($('#gridStep').value)||0.1):0.01;
     const dx=Math.round((raw.x-drag.sx)/step)*step;
     const dy=Math.round((raw.y-drag.sy)/step)*step;
     drag.vtxList.forEach(m=>{
@@ -2096,7 +2098,7 @@ function openOpModal(o){
   }
   $('#mOk').onclick=()=>{
     snapshot();
-    const num=id=>parseFloat(String($(id).value).replace(',','.'));
+    const num=id=>pf(String($(id).value).replace(',','.'));
     o.alt=pass?'':($('#mAltSel').value==='__x'?'':$('#mAltSel').value);
     o.ow=Math.max(0.2,num('#mW')||1);
     o.oh=Math.max(0.2,num('#mH')||1);
@@ -2205,18 +2207,19 @@ function panel(){
       ${[['wallNote','Falazat'],['slabNote','Födém / padló'],['winNote','Nyílászárók'],['heatNote','Fűtés'],['dhwNote','HMV'],['lightNote','Világítás'],['pvNote','Megújuló'],['note','Egyéb megjegyzés']].map(([k,l])=>
         `<div class="row"><label>${l}</label><textarea data-note="${k}" rows="1">${esc(b[k]||'')}</textarea></div>`).join('')}</div>
       <div class="sec"><h4>Export</h4>
+      <div class="row"><label class="chk" style="width:auto;flex:1"><input id="bExpInt" type="checkbox" ${b.expInt!==false?'checked':''}> Belső falak és belső nyílászárók az exportban</label></div>
       <div class="row"><button class="btn pri" id="pXls">Excel WinWatt-hoz (.xlsx)</button><button class="btn" id="pPrn">A4 Nyomtatás</button><button class="btn" id="pPlan">Csak rajz</button></div></div>`;
-    const bind=(id,k,num)=>{$(id).onchange=e=>{b[k]=num?parseFloat(e.target.value)||0:e.target.value;save();updateTopInfo();};};
+    const bind=(id,k,num)=>{$(id).onchange=e=>{b[k]=num?pf(e.target.value)||0:e.target.value;save();updateTopInfo();};};
     bind('#bCust','cust');bind('#bAddr','addr');bind('#bHrsz','hrsz');bind('#bDate','date');
     bind('#bOri','orient',1);bind('#bPm','pm',1);bind('#bTh','defTh',1);
     $('#bBm').onchange=e=>{
-      const nv=parseFloat(e.target.value)||2.7,ov=b.bm;
+      const nv=pf(e.target.value)||2.7,ov=b.bm;
       // az eddig alapértéken lévő helyiségek kövessék az új alapot
       S.rooms.forEach(r=>{if(r.height&&Math.abs(r.height-ov)<1e-6)r.height=null;if(r.height&&Math.abs(r.height-nv)<1e-6)r.height=null;});
       b.bm=nv;save();render();
     };
     p.querySelectorAll('[data-note]').forEach(t=>t.onchange=()=>{b[t.dataset.note]=t.value;save();});
-    $('#pXls').onclick=exportXls;$('#pPrn').onclick=printA4;$('#pPlan').onclick=printPlan;
+    $('#pXls').onclick=exportXls;$('#pPrn').onclick=printA4;if($('#bExpInt'))$('#bExpInt').onchange=e=>{S.b.expInt=e.target.checked;save();updExpIntLbl();};$('#pPlan').onclick=printPlan;
     return;
   }
   // Props tab
@@ -2271,16 +2274,16 @@ function panel(){
   if(ws.length){
     const applyW=()=>{
       snapshot();
-      const th=parseFloat($('#wTh').value),mat=$('#wMat').value,eps=parseFloat($('#wEps').value)||0;
+      const th=pf($('#wTh').value),mat=$('#wMat').value,eps=pf($('#wEps').value)||0;
       setWallsThickness(ws,th,eps,mat);
-      if(ws.length===1)ws[0].sag=parseFloat($('#wSag').value)||0;
+      if(ws.length===1)ws[0].sag=pf($('#wSag').value)||0;
       save();render();panel();
     };
     $('#wApply').onclick=applyW;
     if($('#wAlign'))$('#wAlign').onclick=()=>{snapshot();if(alignFacades(ws)){save();render();panel();}else undoStack.pop(),updateUndoBtns();};
     p.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{$('#wTh').value=b.dataset.th;applyW();});
     if($('#wLen'))$('#wLen').onchange=e=>{
-      const v=parseFloat(e.target.value);if(!(v>0.05))return;
+      const v=pf(e.target.value);if(!(v>0.05))return;
       snapshot();setWallLength(ws[0],v);save();render();panel();
     };
     $('#wDel').onclick=()=>{
@@ -2294,11 +2297,11 @@ function panel(){
     $('#rName').onchange=e=>{snapshot();r.name=e.target.value.trim();const f=FUNCS.find(x=>x.toLowerCase()===r.name.toLowerCase());r.func=f||r.name.toLowerCase();save();render();};
     $('#rSec').onclick=()=>{setLevel(lvlOf(r));openSectionModal();};
     $('#rFlex').onchange=e=>{snapshot();r.flex=e.target.checked;if(r.flex)fitFlexRooms();else relayout(null,new Set([r.id]));save();render();panel();};
-    const rs=()=>{snapshot();resizeRect(r,parseFloat($('#rW').value),parseFloat($('#rHh').value));save();render();panel();};
+    const rs=()=>{snapshot();resizeRect(r,pf($('#rW').value),pf($('#rHh').value));save();render();panel();};
     if($('#rW')){$('#rW').onchange=rs;$('#rHh').onchange=rs;}
     $('#rType').onchange=e=>{r.type=e.target.value;save();render();};
     $('#rH').onchange=e=>{
-      snapshot();const v=parseFloat(e.target.value);
+      snapshot();const v=pf(e.target.value);
       r.height=(!(v>0)||Math.abs(v-S.b.bm)<1e-6)?null:v;
       save();render();
     };
@@ -2415,6 +2418,7 @@ function egtaj(az){return EGTAJ[Math.round(((az%360)+360)%360/45)%8];}
 /* WinWatt-export. Sorrend: külső falak égtájanként (É, ÉK, K … ÉNy), utána a belső falak;
    a nyílászárók ugyanebben a sorrendben (a falukhoz igazítva). A falfelület a nyílászárókkal csökkentett (nettó) felület. */
 function exportXls(){
+  const expInt=S.b.expInt!==false;
   const rel=detectRel(),R=n=>Math.round(n*100)/100,byId=id=>S.rooms.find(x=>x.id===id);
   const rooms=[{0:'Típus',1:'Szint',2:'Név kóddal',5:'Magasság (m)',8:'Nettó terület (m²)',13:'Bérelhető térfogat (m³)'}];
   S.rooms.forEach(r=>{const a=roomArea(r),sc=roomSecCalc(r),h=sc?sc.hAvg:rH(r);rooms.push({0:r.name||'',1:lvlName(lvlOf(r)),2:roomCode(r),5:R(h),8:R(a),13:R(sc?sc.vol:a*h)});}); // padlástérnél: átlagos belmagasság és a metszetből számolt térfogat
@@ -2437,7 +2441,10 @@ function exportXls(){
       if(!seg)seg=segs.find(sg=>sg.v===ow&&(()=>{const W=wGeo(sg.w),tt=((p.x-sg.w.x1)*W.u.x+(p.y-sg.w.y1)*W.u.y)/W.L;return tt>=sg.t0-1e-6&&tt<=sg.t1+1e-6;})());
       const area=o.ow*(o.oh+(o.sh||0));
       const row={0:o.type,1:o.alt||'',3:r?roomCode(r):'',4:r2,8:R(o.oh+(o.sh||0)),9:R(o.ow),10:r2?'':azimuth(G.n.x,G.n.y),11:r2?'belső':egtaj(azimuth(G.n.x,G.n.y))};
+      // belső nyílászárónál a Helyiség 1/2 sorrendje egyezzen a közös fal sorával (a WinWatt így találja meg a falat)
+      if(seg&&seg.r2&&seg.r){row[3]=roomCode(seg.r);row[4]=roomCode(byId(seg.r2));}
       if(seg)seg.ops.push(area);
+      if(!expInt&&r2)return; // belső szerkezetek exportja kikapcsolva
       if(o.type!=='Átjáró')opRows.push({row,seg}); // az átjáró (szárny nélküli nyílás) csak a falfelületből vonódik le
     });
   });
@@ -2446,6 +2453,7 @@ function exportXls(){
   const ordered=segs.map((sg,i)=>({sg,i})).sort((a,b)=>key(a.sg)-key(b.sg)||a.sg.az-b.sg.az||a.i-b.i).map(x=>x.sg);
   const walls=[{1:'Helyiség 1',2:'Helyiség 2',3:'Dőlés (°)',4:'Magasság (m)',5:'Hossz (m)',6:'Égtáj',7:'Szög (°)',8:'Falak felülete (m²)',9:'Bruttó felület (m²)',10:'Nyílászárók (m²)',20:'Fal típusa'}];
   ordered.forEach(sg=>{
+    if(!expInt&&!sg.ext)return;
     const gross=sg.len*sg.h,op=sg.ops.reduce((a,b)=>a+b,0),net=Math.max(0,gross-op);
     walls.push({1:sg.r?roomCode(sg.r):'',2:sg.r2?roomCode(byId(sg.r2)):'',4:R(sg.h),5:R(sg.len),6:sg.ext?egtaj(sg.az):'belső',7:sg.ext?sg.az:'',8:R(net),9:R(gross),10:op?R(op):'',20:wallTypeName(sg.w)});
   });
@@ -2454,7 +2462,7 @@ function exportXls(){
   S.rooms.forEach(r=>{
     const code=roomCode(r),a=roomArea(r);
     const edge=segs.filter(sg=>sg.r===r&&sg.ext).reduce((s,sg)=>s+sg.len,0); // padló külső élhossza (belméret)
-    walls.push({1:code,...(edge>0.01?{4:Math.round(R(a)/R(edge)*1e6)/1e6,5:R(edge)}:{}),6:'padló',8:R(a),20:`Padló – ${r.floor||'n.a.'}`});
+    // a talajon fekvő padlót a WinWatt nem veszi át helyesen (élhossz) – kézzel kell felvenni; élhossza a helyiség panelen
     const l=levelSec(lvlOf(r)),P=l&&secProfile(l.section);
     if(P&&!P.err){
       const poly=roomPoly(r),o=secOrigin(l),ax=P.axis,p=P.pts;
@@ -2616,6 +2624,7 @@ const acts={
   zoomIn(){view.w=Math.max(3,view.w*0.8);render();},
   zoomOut(){view.w=Math.min(80,view.w*1.25);render();},
   fitLevel(){fitLevel();},
+  toggleExpInt(){S.b.expInt=S.b.expInt===false;save();updExpIntLbl();panel();},
   levels(){openLevelsModal();},
   fitView(){
     if(!S.walls.length){view={x:-2,y:-2,w:18,h:12};render();return;}
@@ -2655,7 +2664,7 @@ $('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
 $('#chkGrid').onchange=$('#gridStep').onchange=$('#chkDim').onchange=()=>render();
 
 $('#btnApplyDist').onclick=()=>{
-  const v=parseFloat($('#distVal').value);if(!(v>0))return;
+  const v=pf($('#distVal').value);if(!(v>0))return;
   if(selWalls.size===1){
     const w=S.walls.find(x=>selWalls.has(x.id));if(!w)return;
     snapshot();setWallLength(w,v);
@@ -2745,7 +2754,7 @@ $('#moNext').onclick=e=>{e.stopPropagation();moStep(1);};
 window.addEventListener('keydown',e=>{
   if(!measureMode)return;
   if(/^[0-9.,]$/.test(e.key)){kbBuf+=e.key;e.preventDefault();e.stopPropagation();return;}
-  if((e.key==='Enter'||e.key==='Tab')&&kbBuf){const v=parseFloat(kbBuf.replace(',','.'));kbBuf='';e.preventDefault();e.stopPropagation();if(Number.isFinite(v))onDisto(v);return;}
+  if((e.key==='Enter'||e.key==='Tab')&&kbBuf){const v=pf(kbBuf.replace(',','.'));kbBuf='';e.preventDefault();e.stopPropagation();if(Number.isFinite(v))onDisto(v);return;}
   if(e.key==='Escape'){stopMeasure();e.preventDefault();e.stopPropagation();}
 },true);
 // DISTO-generációk: régi (D110, D2 első verzió, D510…): távolság 3ab10101, parancs 3ab10109;
@@ -2807,14 +2816,16 @@ try{fitFlexRooms();}catch(e){}
 // internet nélküli működés, ha webcímről (HTTPS) fut – pl. GitHub Pages + Bluefy
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 updateTopInfo();updateUndoBtns();updateLevelBtn();render();panel();
+function updExpIntLbl(){const m=$('#mnExpInt');if(m)m.textContent='Belső szerkezetek exportja: '+(S.b.expInt===false?'ki':'be');}
+updExpIntLbl();
 $('#btnLevel').onclick=openLevelsModal;
 $('#btnNum').onclick=()=>numMode?numStop():numStart();
 $('#numStop').onclick=numStop;
 $('#numUndo').onclick=()=>{if(!numMode||!numMode.order.length)return;numMode.order.pop();numApply();};
-$('#segApply').onclick=()=>applySegLen(parseFloat($('#segLen').value));
-$('#segLen').addEventListener('keydown',e=>{if(e.key==='Enter'){applySegLen(parseFloat($('#segLen').value));e.preventDefault();}});
-$('#segLen').addEventListener('change',e=>{if(e.isTrusted===false)applySegLen(parseFloat($('#segLen').value));});
-$$('#segBox [data-dir]').forEach(b=>b.onclick=()=>addSegDir(+b.dataset.dir,parseFloat($('#segLen').value)));
+$('#segApply').onclick=()=>applySegLen(pf($('#segLen').value));
+$('#segLen').addEventListener('keydown',e=>{if(e.key==='Enter'){applySegLen(pf($('#segLen').value));e.preventDefault();}});
+$('#segLen').addEventListener('change',e=>{if(e.isTrusted===false)applySegLen(pf($('#segLen').value));});
+$$('#segBox [data-dir]').forEach(b=>b.onclick=()=>addSegDir(+b.dataset.dir,pf($('#segLen').value)));
 $('#segUndo').onclick=()=>{draft.pop();guides=[];render();};
 $('#segClose').onclick=()=>{if(draft.length>=3){addPolyRoom(draft);draft=[];guides=[];render();}else alert('Legalább 3 pont kell.');};$('#chkGhost').onchange=()=>render();
 })();
