@@ -2412,10 +2412,11 @@ function exportXls(){
     walls.push({1:sg.r?roomCode(sg.r):'',2:sg.r2?roomCode(byId(sg.r2)):'',4:R(sg.h),5:R(sg.len),6:sg.ext?egtaj(sg.az):'belső',7:sg.ext?sg.az:'',8:R(net),9:R(gross),10:op?R(op):'',20:wallTypeName(sg.w)});
   });
   // vízszintes/ferde határolók a lap végén, helyiségenként: padló, födém (padlásfödém), tető
+  // WinWatt: padlónál x (Hossz) = a külső fal élhossza, A = teljes felület; födémnél/tetőnél x = felület, y (Magasság) = 1 szorzó
   S.rooms.forEach(r=>{
     const code=roomCode(r),a=roomArea(r);
     const edge=segs.filter(sg=>sg.r===r&&sg.ext).reduce((s,sg)=>s+sg.len,0); // padló külső élhossza (belméret)
-    walls.push({1:code,5:edge?R(edge):'',6:'padló',8:R(a),20:`Padló – ${r.floor||'n.a.'}`});
+    walls.push({1:code,5:R(edge),6:'padló',8:R(a),20:`Padló – ${r.floor||'n.a.'}`});
     const l=levelSec(lvlOf(r)),P=l&&secProfile(l.section);
     if(P&&!P.err){
       const poly=roomPoly(r),o=secOrigin(l),ax=P.axis,p=P.pts;
@@ -2423,11 +2424,11 @@ function exportXls(){
         const A=p[i],B=p[i+1];if(B.u-A.u<0.01)continue;
         const proj=slabArea(poly,ax,o+A.u,o+B.u);if(proj<0.01)continue;
         const th=Math.atan2(Math.abs(B.h-A.h),B.u-A.u),deg=th*180/Math.PI;
-        if(deg<1){walls.push({1:code,6:'padlásfödém',8:R(proj),20:`Padlásfödém – ${r.slab||'n.a.'}`});continue;}
+        if(deg<1){walls.push({1:code,4:1,5:R(proj),6:'padlásfödém',8:R(proj),20:`Padlásfödém – ${r.slab||'n.a.'}`});continue;}
         const sgn=B.h>A.h?-1:1,az=azimuth(ax==='x'?sgn:0,ax==='x'?0:sgn); // a lejtés iránya (vízszintes vetület)
-        walls.push({1:code,3:Math.round(deg),6:'tető '+egtaj(az),7:az,8:R(proj/Math.cos(th)),20:'Tető'});
+        walls.push({1:code,3:Math.round(deg),4:1,5:R(proj/Math.cos(th)),6:'tető '+egtaj(az),7:az,8:R(proj/Math.cos(th)),20:'Tető'});
       }
-    }else walls.push({1:code,6:'födém',8:R(a),20:`Födém – ${r.slab||'n.a.'}`});
+    }else walls.push({1:code,4:1,5:R(a),6:'födém',8:R(a),20:`Födém – ${r.slab||'n.a.'}`});
   });
   const segIdx=new Map(ordered.map((s,i)=>[s,i]));
   const ops=[{0:'Típus',1:'Altípus',3:'Helyiség 1',4:'Helyiség 2',8:'Magasság (m)',9:'Szélesség (m)',10:'Szög (°)',11:'Égtáj'}];
