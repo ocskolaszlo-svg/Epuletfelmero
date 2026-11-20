@@ -192,6 +192,7 @@ textarea{resize:vertical}
         <button data-act="fitView">Teljes rajz (minden szint)</button>
         <button data-act="fitLevel">Aktuális szint</button>
         <button data-act="levels">Szintek…</button>
+        <button data-act="arrangeLv">Szintek egy sorba rendezése</button>
         <hr>
         <button data-act="toggleGrid">Rács be/ki</button>
         <button data-act="toggleDim">Kotta be/ki</button>
@@ -311,7 +312,7 @@ textarea{resize:vertical}
   <div class="mo-btns"><button id="moPrev">◀ Előző mező</button><button id="moNext">Következő mező ▶</button><button id="moExit">✕ Kilépés</button></div>
 </div><div class="mo-hint" id="moHint">Érintsd meg a képernyőt a méréshez</div></div>
 <div id="printArea"></div>
-<input id="fileIn" type="file" accept=".json" style="display:none">
+<input id="fileIn" type="file" accept=".json,application/json,text/plain" style="display:none">
 
 <script>
 (()=>{
@@ -917,6 +918,18 @@ function addLevel(name){
   const nl={id:uid(),name,bx:r2(cur.bx+d),by:cur.by,ref:cur.id,section:null};
   S.levels.push(nl);S.curLevel=nl.id;updateLevelBtn();
 }
+// szintek egy sorba: azonos felső él, balról jobbra, egyenletes térközzel (a bázispont együtt mozog)
+function arrangeLevels(){
+  let top=null,nextX=null;const GAP=6;
+  S.levels.forEach(l=>{
+    const ws=levelWalls(l.id),B=boundsOf(ws);
+    if(!B){if(nextX!==null){l.bx=r3(nextX+3);if(top!==null)l.by=r3(top+3);nextX+=GAP+6;}return;}
+    if(top===null){top=B.minY;nextX=B.maxX+GAP;return;}
+    const dx=nextX-B.minX,dy=top-B.minY;
+    ws.forEach(w=>{w.x1=r3(w.x1+dx);w.x2=r3(w.x2+dx);w.y1=r3(w.y1+dy);w.y2=r3(w.y2+dy);});
+    l.bx=r3(l.bx+dx);l.by=r3(l.by+dy);nextX=B.maxX+dx+GAP;
+  });
+}
 function openLevelsModal(){
   const m=$('#modal');
   const rows=S.levels.map(l=>`<tr data-lid="${l.id}">
@@ -928,6 +941,7 @@ function openLevelsModal(){
   m.innerHTML=`<h3><span>Szintek</span><button class="btn" id="mClose">✕</button></h3>
     <table style="width:100%"><tr><th></th><th>Név</th><th>Segédkontúr</th><th></th><th></th></tr>${rows}</table>
     <div class="row" style="margin-top:10px"><label>Új szint</label><select id="lvNew">${LEVEL_PRESETS.map(n=>`<option>${n}</option>`).join('')}<option value="">Egyéb…</option></select><button class="btn pri" id="lvAdd">+ Hozzáadás</button></div>
+    <div class="row"><button class="btn" id="lvArr">Szintek egy sorba rendezése</button></div>
     <p class="muted">A szintek a vásznon egymás mellett vannak. A bázispont (pl. egy közös sarok vagy lépcső) köti össze őket: a segédkontúrként választott szint külső kontúrja ehhez igazítva, szaggatott vonallal és fogópontokkal jelenik meg az aktuális szinten.</p>`;
   $('#modalWrap').classList.add('open');
   const close=()=>{$('#modalWrap').classList.remove('open');render();panel();};
@@ -955,6 +969,7 @@ function openLevelsModal(){
       }
     });
   });
+  $('#lvArr').onclick=()=>{snapshot();arrangeLevels();save();close();acts.fitView();};
   $('#lvAdd').onclick=()=>{
     let n=$('#lvNew').value;
     if(!n)n=(prompt('Szint neve:')||'').trim();
@@ -1277,14 +1292,30 @@ function snapPt(raw,lastPt){
     });
     ghostLines().forEach(pl=>pl.forEach(p=>pts.push(p))); // másik szint kontúrja is fogópont
     draft.forEach(p=>pts.push(p));
+    // falsíkok (belső és külső) + metszéspontjaik: T-csatlakozásoknál a belső/külső sarok is fogópont
+    const lines=[];
+    S.walls.forEach(w=>{
+      if(w.sag)return;
+      lines.push({a:{x:w.x1,y:w.y1},b:{x:w.x2,y:w.y2},e:thOf(w)});
+      const o=offPts(w,thOf);lines.push({a:o[0],b:o[o.length-1],e:thOf(w)});
+    });
+    const near=(L,q)=>{const dx=L.b.x-L.a.x,dy=L.b.y-L.a.y,l2=dx*dx+dy*dy;if(l2<1e-9)return null;
+      const t=((q.x-L.a.x)*dx+(q.y-L.a.y)*dy)/l2;return {t,len:Math.sqrt(l2),x:L.a.x+t*dx,y:L.a.y+t*dy};};
+    const inR=(L,P,ext)=>{const n=near(L,P);if(!n)return false;const e=ext/n.len;return n.t>-e&&n.t<1+e;};
+    const cand=lines.filter(L=>{const n=near(L,raw);if(!n)return false;const e=(tol*3)/n.len;return n.t>-e&&n.t<1+e&&Math.hypot(n.x-raw.x,n.y-raw.y)<tol*3;});
+    for(let i=0;i<cand.length;i++)for(let j=i+1;j<cand.length;j++){
+      const A=cand[i],B=cand[j],d1={x:A.b.x-A.a.x,y:A.b.y-A.a.y},d2={x:B.b.x-B.a.x,y:B.b.y-B.a.y};
+      const den=d1.x*d2.y-d1.y*d2.x;if(Math.abs(den)<1e-9)continue;
+      const t=((B.a.x-A.a.x)*d2.y-(B.a.y-A.a.y)*d2.x)/den,P={x:A.a.x+t*d1.x,y:A.a.y+t*d1.y};
+      const ext=Math.max(A.e,B.e)+0.03;
+      if(inR(A,P,ext)&&inR(B,P,ext))pts.push(P);
+    }
     let bestV=tol,bestX=null,bestY=null,bestXSrc=null,bestYSrc=null;
     // endpoint snap
-    for(const p of pts){
-      if(Math.hypot(p.x-raw.x,p.y-raw.y)<tol){
-        x=p.x;y=p.y;cadPt={x,y};
-        return {x:r3(x),y:r3(y)};
-      }
-    }
+    // a legközelebbi pont nyer (12 cm-es falnál a belső és külső sarok is közel van egymáshoz)
+    let bp=null,bd=tol*0.7;
+    for(const p of pts){const d=Math.hypot(p.x-raw.x,p.y-raw.y);if(d<bd){bd=d;bp=p;}}
+    if(bp){x=bp.x;y=bp.y;cadPt={x,y};return {x:r3(x),y:r3(y)};}
     // ortho alignment from existing vertices
     for(const p of pts){
       if(Math.abs(p.x-raw.x)<bestV){bestV=Math.abs(p.x-raw.x);bestX=p.x;bestXSrc=p;}
@@ -1296,6 +1327,23 @@ function snapPt(raw,lastPt){
     if(bestX!==null){x=bestX;guides.push({x1:bestX,y1:bestXSrc.y,x2:bestX,y2:raw.y,c:'#22c55e'});}
     if(bestY!==null){y=bestY;guides.push({x1:bestYSrc.x,y1:bestY,x2:raw.x,y2:bestY,c:'#22c55e'});}
     if(bestX!==null&&bestY!==null)cadPt={x,y};
+    else{
+      // falsíkra illesztés (belső vagy külső felület), ha nincs pontos sarok
+      let bl=null,bld=tol*0.6;
+      cand.forEach(L=>{const n=near(L,raw);if(n&&n.t>=0&&n.t<=1){const d=Math.hypot(n.x-raw.x,n.y-raw.y);if(d<bld){bld=d;bl=L;}}});
+      if(bl){
+        const vert=Math.abs(bl.a.x-bl.b.x)<1e-6,hor=Math.abs(bl.a.y-bl.b.y)<1e-6;
+        const rg=v=>useGrid?Math.round(v/step)*step:v;
+        if(vert){x=bl.a.x;y=bestY!==null?bestY:rg(raw.y);}
+        else if(hor){y=bl.a.y;x=bestX!==null?bestX:rg(raw.x);}
+        if(lastPt&&vert&&bestY===null&&Math.abs(raw.y-lastPt.y)<tol)y=lastPt.y;
+        if(lastPt&&hor&&bestX===null&&Math.abs(raw.x-lastPt.x)<tol)x=lastPt.x;
+        else{const n=near(bl,raw);x=n.x;y=n.y;}
+        guides=guides.filter(g=>!(vert&&g.x1===g.x2)&&!(hor&&g.y1===g.y2));
+        guides.push({x1:bl.a.x,y1:bl.a.y,x2:bl.b.x,y2:bl.b.y,c:'#f59e0b'});
+        cadPt={x,y};return {x:r3(x),y:r3(y)};
+      }
+    }
     if(lastPt){
       if(Math.abs(raw.x-lastPt.x)<tol){x=lastPt.x;guides.push({x1:lastPt.x,y1:lastPt.y,x2:x,y2:raw.y,c:'#a855f7'});}
       if(Math.abs(raw.y-lastPt.y)<tol){y=lastPt.y;guides.push({x1:lastPt.x,y1:lastPt.y,x2:raw.x,y2:y,c:'#a855f7'});}
@@ -2480,8 +2528,7 @@ function exportXls(){
   const ops=[{0:'Típus',1:'Altípus',3:'Helyiség 1',4:'Helyiség 2',8:'Magasság (m)',9:'Szélesség (m)',10:'Szög (°)',11:'Égtáj'}];
   opRows.map((x,i)=>({x,i,k:x.seg&&segIdx.has(x.seg)?segIdx.get(x.seg):1e9})).sort((a,b)=>a.k-b.k||a.i-b.i).forEach(({x})=>ops.push(x.row));
   const blob=buildXlsx([{name:'Helyiségek',rows:rooms},{name:'Nyílászárók',rows:ops},{name:'Falak',rows:walls}]);
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`epuletfelmeres_${(S.b.addr||'').replace(/[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ]+/g,'_').slice(0,40)||'winwatt'}.xlsx`;a.click();
+  deliver(blob,`${fileBase()}_${stamp()}.xlsx`);
 }
 
 /* A4 Print */
@@ -2611,9 +2658,22 @@ function printPlan(){
 }
 /* Actions, Menus, Bluetooth DISTO */
 function updateTopInfo(){$('#topInfo').textContent=`Rajzolási fal: ${Math.round((S.b.defTh||0.12)*100)} cm · Lépték 1:${S.b.scale}`;}
+// iPad: megosztási lap („Mentés a Fájlokba”), egyébként normál letöltés
+function stamp(){const d=new Date(),z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`;}
+function fileBase(){return (S.b.addr||'').replace(/[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)||'felmeres';}
+function deliver(blob,name){
+  try{
+    const f=new File([blob],name,{type:blob.type||'application/octet-stream'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      navigator.share({files:[f],title:name}).catch(e=>{if(e&&e.name!=='AbortError')dl();});return;
+    }
+  }catch(e){}
+  dl();
+  function dl(){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},4000);}
+}
 const acts={
   newDoc(){if(confirm('Új üres felmérés?')){snapshot();S=defState();selWalls.clear();selRoom=null;selOp=null;save();render();panel();}},
-  saveJson(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download='epuletfelmeres.json';a.click();},
+  saveJson(){deliver(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),`${fileBase()}_${stamp()}.json`);},
   loadJson(){$('#fileIn').click();},
   exportXls,printA4,printPlan,undo,redo,
   delSel(){
@@ -2626,6 +2686,7 @@ const acts={
   fitLevel(){fitLevel();},
   toggleExpInt(){S.b.expInt=S.b.expInt===false;save();updExpIntLbl();panel();},
   levels(){openLevelsModal();},
+  arrangeLv(){snapshot();arrangeLevels();save();acts.fitView();},
   fitView(){
     if(!S.walls.length){view={x:-2,y:-2,w:18,h:12};render();return;}
     const B=bounds();

@@ -1,6 +1,6 @@
 // Épületfelmérő – internet nélküli működés.
 // Az oldalt hálózatról próbálja betölteni (így a frissítés megérkezik), ha nincs net, a tárolt példányt adja.
-const CACHE = 'felmero-v10';
+const CACHE = 'felmero-v11';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
