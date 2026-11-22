@@ -2298,6 +2298,8 @@ function panel(){
   if(r){
     html+=`<div class="sec"><h4>${roomNo(r)}. helyiség (${hu(roomArea(r),2,true)} m²)</h4>
       <div class="row"><label>Név / funkció</label><input id="rName" list="dl_func" value="${esc(r.name)}"><datalist id="dl_func">${catOpts('func').map(v=>`<option value="${esc(v.charAt(0).toUpperCase()+v.slice(1))}">`).join('')}</datalist></div>
+      ${S.levels.length>1?`<div class="row"><label>Szint</label><select id="rLvl">${S.levels.map(l=>`<option value="${l.id}" ${lvlOf(r)===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select></div>
+      <div class="row"><label></label><label class="chk" style="flex:1"><input id="rLvlGrp" type="checkbox" checked> a vele összefüggő helyiségekkel együtt</label></div>`:''}
       <div class="row"><label>Típus</label><select id="rType">${['Fűtött','Fűtetlen','Pince','Kültér'].map(t=>`<option ${r.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
       ${(()=>{const sc=roomSecCalc(r);return sc?`<p class="muted" style="color:#fbbf24">Padlástér: teljes ${hu(sc.area,2,true)} m² · 1,90 m feletti ${hu(sc.area19,2,true)} m² · térfogat ${hu(sc.vol,1,true)} m³ · átl. bm ${hu(sc.hAvg,2,true)} m</p>`:'';})()}
       <p class="muted">Padló élhossza (külső falak, belméret): <b>${hu(floorEdge(r),2,true)} m</b></p>
@@ -2348,6 +2350,15 @@ function panel(){
     const rs=()=>{snapshot();resizeRect(r,pf($('#rW').value),pf($('#rHh').value));save();render();panel();};
     if($('#rW')){$('#rW').onchange=rs;$('#rHh').onchange=rs;}
     $('#rType').onchange=e=>{r.type=e.target.value;save();render();};
+    if($('#rLvl'))$('#rLvl').onchange=e=>{
+      snapshot();const to=e.target.value,grp=new Set([r.id]);
+      if($('#rLvlGrp').checked){
+        const rel=detectRel();let ch=true;
+        while(ch){ch=false;rel.parts.forEach(x=>{const a=x.w.roomId,b=x.v.roomId;if(grp.has(a)!==grp.has(b)){grp.add(a);grp.add(b);ch=true;}});}
+      }
+      S.rooms.forEach(x=>{if(grp.has(x.id))x.level=to;});
+      setLevel(to);save();render();panel();showHint(`${grp.size} helyiség áthelyezve: ${lvlName(to)}`);
+    };
     $('#rH').onchange=e=>{
       snapshot();const v=pf(e.target.value);
       r.height=(!(v>0)||Math.abs(v-S.b.bm)<1e-6)?null:v;
