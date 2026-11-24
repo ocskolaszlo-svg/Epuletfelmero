@@ -464,11 +464,13 @@ function roomPoly(r){
   const ws=S.walls.filter(w=>w.roomId===r.id);
   if(!ws.length)return [];
   const pts=[];
-  ws.forEach(w=>{
+  ws.forEach((w,i)=>{
     pts.push({x:w.x1,y:w.y1});
     if(w.sag){
       for(let i=1;i<8;i++){const p=wPtAt(w,i/8);pts.push({x:p.x,y:p.y});}
     }
+    // hiányzó (fal nélküli) szakasz: a fal vége is sarokpont
+    const nx=ws[(i+1)%ws.length];if(Math.hypot(nx.x1-w.x2,nx.y1-w.y2)>0.01)pts.push({x:w.x2,y:w.y2});
   });
   return pts;
 }
@@ -577,6 +579,10 @@ function opPlace(o,w,t){
 }
 function opTs(o,w){
   const cnt=Math.max(1,o.cnt||1),L=wLen(w)||1;
+  if(cnt>1&&o.gang){ // sorolt: egymás mellett, a megadott pozíció körül
+    const tw=cnt*o.ow/L,c=Math.max(tw/2,Math.min(1-tw/2,o.pos));
+    return [...Array(cnt)].map((_,i)=>c+((i-(cnt-1)/2)*o.ow)/L);
+  }
   const span=cnt>1?Math.min(0.7,cnt*(o.ow/L+0.08)):0;
   const ts=[];
   for(let i=0;i<cnt;i++)ts.push(cnt===1?o.pos:Math.max(0.06,Math.min(0.94,o.pos-span/2+(span/(cnt-1))*i)));
@@ -625,6 +631,17 @@ function detectRel(forSolve=false){
       partOf.add(w);partOf.add(v);
       if(i<j)parts.push({w,v,A:w.roomId,B:v.roomId,ax:a.ax,ov});
     }
+  }
+  // ferde (nem tengelyirányú) közös falak: ellentétes irányú, egymással szemben álló falsíkok
+  const dg=S.walls.filter(w=>!w.sag&&!inf.has(w)&&!(forSolve&&flex.has(w.roomId))&&wLen(w)>0.05);
+  for(let i=0;i<dg.length;i++)for(let j=i+1;j<dg.length;j++){
+    const w=dg[i],v=dg[j];if(w.roomId===v.roomId||lm.get(w.roomId)!==lm.get(v.roomId))continue;
+    const A=wGeo(w),B=wGeo(v);if(A.u.x*B.u.x+A.u.y*B.u.y>-0.99)continue;
+    const g=((v.x1+v.x2)/2-w.x1)*A.n.x+((v.y1+v.y2)/2-w.y1)*A.n.y;
+    if(!(g>-0.05&&g<Math.max(thOf(w),thOf(v))+0.3))continue;
+    const a=(v.x1-w.x1)*A.u.x+(v.y1-w.y1)*A.u.y,b=(v.x2-w.x1)*A.u.x+(v.y2-w.y1)*A.u.y;
+    const ov=Math.min(A.L,Math.max(a,b))-Math.max(0,Math.min(a,b));if(ov<0.2)continue;
+    partOf.add(w);partOf.add(v);parts.push({w,v,A:w.roomId,B:v.roomId,ax:null,ov});
   }
   for(let i=0;i<ws.length;i++)for(let j=i+1;j<ws.length;j++){
     const w=ws[i],v=ws[j];if(w.roomId===v.roomId||partOf.has(w)||partOf.has(v)||lm.get(w.roomId)!==lm.get(v.roomId))continue;
@@ -985,10 +1002,12 @@ function showHint(t){const h=$('#badge');if(h){h.textContent=t;}}
    jobb tetőszakasz, jobb oldalfal, belmagasság, teljes szélesség. A köztes falak a rajzból jönnek.
    Számítás: teljes alapterület, 1,90 m feletti belmagasságú alapterület, térfogat. */
 const SEC_LIM=1.9;
-function secProfile(sec){
+function secProfile(sec,lv){
   if(!sec)return null;
   const n=v=>(v===''||v==null||!isFinite(+v))?null:+v;
-  const W=n(sec.W),H=n(sec.H);let hL=n(sec.hL),hR=n(sec.hR),sL=n(sec.sL),sR=n(sec.sR),c=n(sec.c);
+  let W=n(sec.W);const H=n(sec.H);
+  if(!(W>0)&&lv)W=planExtent(lv,sec.axis||'x'); // üres teljes szélesség: a rajzból
+  let hL=n(sec.hL),hR=n(sec.hR),sL=n(sec.sL),sR=n(sec.sR),c=n(sec.c);
   if(!(W>0)||!(H>0))return {err:'Add meg a teljes szélességet és a belmagasságot.'};
   if(sec.sym){if(hR==null)hR=hL;if(sR==null)sR=sL;}
   if(hL==null)hL=0;if(hR==null)hR=0;
@@ -1046,7 +1065,7 @@ function slabArea(poly,ax,lo,hi){return polyAreaAbs(clipHalf(clipHalf(poly,ax,lo
 const secCache=new Map();
 function roomSecCalc(r){
   const l=levelSec(lvlOf(r));if(!l)return null;
-  const P=secProfile(l.section);if(!P||P.err)return null;
+  const P=secProfile(l.section,l);if(!P||P.err)return null;
   const poly=roomPoly(r);if(poly.length<3)return null;
   const o=secOrigin(l),ax=P.axis;
   const key=JSON.stringify([poly,l.section,o]);
@@ -1062,14 +1081,14 @@ function roomSecCalc(r){
 // fal belmagassága metszetes szinten: a metszettel párhuzamos falnál az átlag, a merőlegesnél a helyi magasság
 function wallSecHeight(w){
   const r=S.rooms.find(x=>x.id===w.roomId);const l=r&&levelSec(lvlOf(r));if(!l)return null;
-  const P=secProfile(l.section);if(!P||P.err)return null;
+  const P=secProfile(l.section,l);if(!P||P.err)return null;
   const o=secOrigin(l),ax=P.axis,a=(ax==='x'?w.x1:w.y1)-o,b=(ax==='x'?w.x2:w.y2)-o;
   if(Math.abs(b-a)<0.02)return hAt(P,(a+b)/2);
   let s=0;const n=40;for(let i=0;i<n;i++)s+=hAt(P,a+(b-a)*(i+0.5)/n);return s/n;
 }
 // metszet rajz (SVG szöveg) – képernyőn és nyomtatáson
 function sectionSvg(l,wpx,hpx,print){
-  const P=secProfile(l.section);if(!P||P.err)return `<div class="muted">${P&&P.err||''}</div>`;
+  const P=secProfile(l.section,l);if(!P||P.err)return `<div class="muted">${P&&P.err||''}</div>`;
   const pad=0.9,W=P.W,H=Math.max(P.H,P.hL,P.hR,2);
   const vb=`${-pad} ${-H-pad*0.8} ${W+pad*2} ${H+pad*1.8}`;
   const fg=print?'#000':'#e2e8f0',mu=print?'#444':'#94a3b8',ac=print?'#b45309':'#fbbf24',fs=Math.max(0.17,W/34);
@@ -1104,7 +1123,7 @@ function secSummaryHtml(l){
   const rs=S.rooms.filter(r=>lvlOf(r)===l.id).map(r=>({r,c:roomSecCalc(r)})).filter(x=>x.c);
   if(!rs.length)return '';
   const tA=rs.reduce((s,x)=>s+x.c.area,0),t19=rs.reduce((s,x)=>s+x.c.area19,0);
-  const P=secProfile(l.section),pt=(a,b)=>Math.round(Math.atan2(Math.abs(b.h-a.h),Math.max(1e-6,b.u-a.u))*180/Math.PI);
+  const P=secProfile(l.section,l),pt=(a,b)=>Math.round(Math.atan2(Math.abs(b.h-a.h),Math.max(1e-6,b.u-a.u))*180/Math.PI);
   const pitchTxt=P&&!P.err?`<div style="margin-top:3px">Tetőhajlás: bal ${P.aL>0.05?pt(P.pts[0],P.pts[1])+'°':'—'}, jobb ${P.aR>0.05?pt(P.pts[2],P.pts[3])+'°':'—'}</div>`:'';
   return pitchTxt+`<table class="sectab"><tr><th>Helyiség</th><th>Teljes m²</th><th>≥1,90 m m²</th></tr>${rs.map(x=>`<tr><td>${roomNo(x.r)}. ${esc(x.r.name)}</td><td>${hu(x.c.area,2,true)}</td><td>${hu(x.c.area19,2,true)}</td></tr>`).join('')}<tr><td><b>Összesen</b></td><td><b>${hu(tA,2,true)}</b></td><td><b>${hu(t19,2,true)}</b></td></tr></table>`;
 }
@@ -1138,7 +1157,7 @@ function openSectionModal(){
   const read=()=>{const s={axis:$('#sc_axis').value,sym:$('#sc_sym').checked};['W','hL','sL','c','sR','hR','H'].forEach(k=>{const v=$('#sc_'+k).value;s[k]=v===''?'':pf(v);});return s;};
   const prev=()=>{
     const s=read(),old=l.section;l.section=s;secCache.clear();
-    const P=secProfile(s);
+    const P=secProfile(s,l);
     $('#scPrev').innerHTML=sectionSvg(l,'100%',220,false);
     $('#scWarn').innerHTML=P&&P.warn?P.warn.map(esc).join('<br>'):'';
     $('#scSum').innerHTML=(P&&!P.err)?secSummaryHtml(l)+(()=>{const pe=planExtent(l,s.axis);return pe&&s.W&&Math.abs(pe-s.W)>0.05?`<p style="color:#fbbf24;font-size:12px">A rajz szerinti szélesség ${hu(pe,2,true)} m, a mért ${hu(+s.W,2,true)} m.</p>`:'';})():'';
@@ -1251,6 +1270,7 @@ function numStart(){
 function numApply(){
   const first=numMode.order.map(id=>S.rooms.find(r=>r.id===id)).filter(Boolean);
   S.rooms=first.concat(numMode.orig.filter(r=>!numMode.order.includes(r.id)));
+  S.rooms.forEach((r,i)=>{if(DEF_NAME.test(r.name||''))r.name='Helyiség '+(i+1);});
   save();render();panel();numUpd();
 }
 function numTap(r){if(numMode.order.includes(r.id))return;numMode.order.push(r.id);numApply();}
@@ -1547,15 +1567,14 @@ function render(targetSvg=svg,isPrint=false){
     const isSel=r.id===selRoom&&!isPrint;
     const isPince=(r.floor==='pince'||r.type==='Pince');
     el('path',{d,fill:isPince?`url(#${pre}pince)`:(isPrint?'#f8fafc':(isSel?'#1e3a8a44':'#2563eb1a')),stroke:'none'},gR);
-    const c=roomCenter(r),area=roomArea(r);
+    const c=roomCenter(r),area=roomArea(r),sc=roomSecCalc(r);
     const fs=isPrint?0.24:Math.max(0.16,Math.min(0.28,px*13));
-    const lines=[{t:`${roomNo(r)}. ${r.name}`,f:1,w:'600',c:isPrint?'#000':'#e2e8f0'},{t:`${hu(area,2,true)} m²`,f:0.88,c:isPrint?'#333':'#93c5fd'}];
+    const lines=[{t:`${roomNo(r)}. ${r.name}`,f:1,w:'600',c:isPrint?'#000':'#e2e8f0'},{t:sc?`${hu(sc.area19,2,true)} m² (${hu(area,2,true)} m²)`:`${hu(area,2,true)} m²`,f:0.88,c:isPrint?'#333':'#93c5fd'}];
     // padló mindig; födém csak ha nem mindenhol azonos
     const meta=[r.floor,slabsDiffer?r.slab:''].filter(Boolean).join(' · ');
     if(meta)lines.push({t:meta,f:0.75,c:isPrint?'#444':'#cbd5e1'});
     if(r.flex)lines.push({t:'(kiadódó)',f:0.7,c:isPrint?'#444':'#c4b5fd'});
-    const sc=roomSecCalc(r);
-    if(sc)lines.push({t:`≥1,90 m: ${hu(sc.area19,2,true)} m²`,f:0.82,w:'600',c:isPrint?'#000':'#fbbf24'});
+    if(sc)lines.push({t:`(teljes alapterület zárójelben)`,f:0.62,c:isPrint?'#444':'#fbbf24'});
     if(r.height&&Math.abs(r.height-S.b.bm)>1e-6)lines.push({t:`bm ${hu(r.height)}`,f:0.78,w:'600',c:isPrint?'#000':'#fcd34d'});
     if(!isPrint){
       const sys=SYS_KEYS.map(k=>getV(r,k)).filter(Boolean).join(' · ');
@@ -1644,7 +1663,7 @@ function render(targetSvg=svg,isPrint=false){
   // Padlástér: az 1,90 m-es belmagasság határvonalai a rajzon
   S.levels.forEach(l=>{
     if(!l.section)return;
-    const P=secProfile(l.section);if(!P||P.err)return;
+    const P=secProfile(l.section,l);if(!P||P.err)return;
     const B=boundsOf(levelWalls(l.id));if(!B)return;
     const o=secOrigin(l),ax=P.axis,gS=el('g',{},targetSvg),col=isPrint?'#b45309':'#fbbf24';
     const lw=isPrint?0.02:px*1.8,fs=isPrint?0.17:Math.max(0.13,px*10);
@@ -1665,7 +1684,7 @@ function render(targetSvg=svg,isPrint=false){
     S.levels.forEach(l=>{
       const cur=l.id===S.curLevel,B=boundsOf(levelWalls(l.id));
       const col=cur?'#60a5fa':'#94a3b8';
-      const lx=B?B.minX:l.bx,ly=B?B.minY-Math.max(px*52,1.3):l.by-px*34;
+      const lx=B?B.minX:l.bx,ly=B?B.minY-Math.max(px*52,1.3)-(showOverall&&$("#chkDim").checked?Math.max(px*22,0.5):0):l.by-px*34;
       const tx=el('text',{x:lx,y:ly,fill:col,'font-size':px*17,'font-weight':cur?'700':'500'},gL);
       tx.textContent=l.name+(cur?' (aktuális)':'');
       const r=px*7;
@@ -1800,12 +1819,14 @@ function renderDimensions(targetSvg,px,isPrint,rel){
     });
   });
   if(!showOverall)return;
-  const B=bounds();if(!B)return;
-  const ow=B.maxX-B.minX,oh=B.maxY-B.minY,oDist=gap*2+0.35;
-  if(ow>0.5&&oh>0.5){
-    drawOverall(gK,B.minX,B.minY-oDist,B.maxX,B.minY-oDist,`${hu(ow,2,true)} (külső)`,col,sw,fs,0);
-    drawOverall(gK,B.maxX+oDist,B.minY,B.maxX+oDist,B.maxY,`${hu(oh,2,true)} (külső)`,col,sw,fs,90);
-  }
+  S.levels.forEach(l=>{ // szintenként külön
+    const B=boundsOf(levelWalls(l.id));if(!B)return;
+    const ow=B.maxX-B.minX,oh=B.maxY-B.minY,oDist=gap*2+0.35;
+    if(ow>0.5&&oh>0.5){
+      drawOverall(gK,B.minX,B.minY-oDist,B.maxX,B.minY-oDist,`${hu(ow,2,true)} (külső)`,col,sw,fs,0);
+      drawOverall(gK,B.maxX+oDist,B.minY,B.maxX+oDist,B.maxY,`${hu(oh,2,true)} (külső)`,col,sw,fs,90);
+    }
+  });
 }
 function drawOverall(g,x1,y1,x2,y2,txt,col,sw,fs,rot){
   el('line',{x1,y1,x2,y2,stroke:col,'stroke-width':sw*1.1,opacity:'0.85'},g);
@@ -2127,7 +2148,7 @@ function openOpModal(o){
     <div class="row"><label>Magasság (m)</label><input id="mH" data-disto type="text" inputmode="none" autocomplete="off" value="${o.oh}"></div>
     ${pass?'':`<div class="row" ${o.type==='Ajtó'?'style="display:none"':''}><label>Redőnytok</label><label class="chk" style="width:auto;flex:none"><input id="mShOn" type="checkbox" ${o.sh>0?'checked':''}> van</label><input id="mSh" data-disto type="text" inputmode="none" autocomplete="off" value="${o.sh>0?o.sh:0.3}" style="flex:none;width:70px" ${o.sh>0?'':'disabled'}><span class="muted">m</span></div>
     <div class="row"><label>Parapet pm (m)</label><input id="mPm" data-disto type="text" inputmode="none" autocomplete="off" value="${o.pm||0}"></div>`}
-    <div class="row"><label>Darabszám (db)</label><input id="mCnt" type="number" min="1" max="12" value="${o.cnt||1}"></div>
+    <div class="row"><label>Darabszám (db)</label><input id="mCnt" type="number" min="1" max="12" value="${o.cnt||1}" style="flex:none;width:70px"><label class="chk" style="width:auto;flex:none;margin-left:10px"><input id="mGang" type="checkbox" ${o.gang?'checked':''}> sorolva (egymás mellett)</label></div>
     <div class="row" style="justify-content:flex-end;margin-top:10px">
       ${(o.cnt||1)>1?'<button class="btn" id="mSplit">Szétbontás</button>':''}
       <button class="btn dan" id="mDel">Törlés</button>
@@ -2153,6 +2174,7 @@ function openOpModal(o){
     o.sh=pass?0:($('#mShOn').checked?Math.max(0.05,num('#mSh')||0.3):0);
     o.pm=pass?0:Math.max(0,num('#mPm')||0);
     o.cnt=Math.max(1,parseInt($('#mCnt').value)||1);
+    o.gang=$('#mGang').checked||undefined;
     // save to recent/frequent list if new
     if(!S.freqOps.some(f=>f.type===o.type&&f.ow===o.ow&&f.oh===o.oh&&f.pm===o.pm&&f.sh===o.sh)){
       S.freqOps.unshift({type:o.type,alt:o.alt,ow:o.ow,oh:o.oh,sh:o.sh,pm:o.pm});
@@ -2356,7 +2378,9 @@ function panel(){
         const rel=detectRel();let ch=true;
         while(ch){ch=false;rel.parts.forEach(x=>{const a=x.w.roomId,b=x.v.roomId;if(grp.has(a)!==grp.has(b)){grp.add(a);grp.add(b);ch=true;}});}
       }
+      const from=lvlOf(r),fl=S.levels.find(l=>l.id===from),tl=S.levels.find(l=>l.id===to);
       S.rooms.forEach(x=>{if(grp.has(x.id))x.level=to;});
+      if(fl&&tl&&fl.section&&!tl.section&&confirm(`A(z) ${fl.name} szinten van padlástér-metszet. Átkerüljön a(z) ${tl.name} szintre?`)){tl.section=fl.section;fl.section=null;}
       setLevel(to);save();render();panel();showHint(`${grp.size} helyiség áthelyezve: ${lvlName(to)}`);
     };
     $('#rH').onchange=e=>{
@@ -2465,10 +2489,19 @@ function wallSegments(w,rel){
   cov.forEach(([lo,hi])=>{if(lo>x)free.push([x,lo]);x=Math.max(x,hi);});if(L>x)free.push([x,L]);
   const th=thOf(w);
   free.reverse().forEach(([lo,hi])=>{
-    if(hi-lo<0.05)return;
-    const m=(lo+hi)/2,px=w.x1+G.u.x*m+G.n.x*(th+0.15),py=w.y1+G.u.y*m+G.n.y*(th+0.15);
-    const inside=S.rooms.some(r=>r.id!==w.roomId&&ptInRoom(px,py,r))||S.walls.some(v=>v.roomId!==w.roomId&&ptInPoly(wallPoly(v),px,py));
-    if(!inside)out.unshift({len:hi-lo,r2:null,az,w,t0:lo/L,t1:hi/L});
+    if(hi-lo<0.08)return; // falcsatlakozásba eső csonk
+    const m=(lo+hi)/2,at=d=>({x:w.x1+G.u.x*m+G.n.x*d,y:w.y1+G.u.y*m+G.n.y*d});
+    const P=at(th+0.15),lv=lvlOf(room);
+    if(S.walls.some(v=>v.roomId!==w.roomId&&ptInPoly(wallPoly(v),P.x,P.y)))return;
+    // a fal túloldalán másik helyiség van (pl. ferde fal, aminek a túloldalán nincs külön fal) → belső fal
+    let nb=null;for(const d of [th+0.05,th+0.15,th+0.3]){const Q=at(d);nb=S.rooms.find(r=>r.id!==w.roomId&&lvlOf(r)===lv&&ptInRoom(Q.x,Q.y,r));if(nb)break;}
+    if(nb){
+      const iw=S.rooms.indexOf(room),ir=S.rooms.indexOf(nb),Q=at(th);
+      const dup=S.walls.some(v=>v.roomId===nb.id&&!v.sag&&(()=>{const V=wGeo(v),t=((Q.x-v.x1)*V.u.x+(Q.y-v.y1)*V.u.y);if(t<0||t>V.L)return false;return Math.abs((Q.x-v.x1)*V.n.x+(Q.y-v.y1)*V.n.y)<0.25;})());
+      if(!dup||iw<ir)out.unshift({len:hi-lo,r2:nb.id,az,w,t0:lo/L,t1:hi/L});
+      return;
+    }
+    out.unshift({len:hi-lo,r2:null,az,w,t0:lo/L,t1:hi/L});
   });
   return out;
 }
@@ -2476,11 +2509,13 @@ const EGTAJ=['É','ÉK','K','DK','D','DNy','Ny','ÉNy'];
 function egtaj(az){return EGTAJ[Math.round(((az%360)+360)%360/45)%8];}
 /* WinWatt-export. Sorrend: külső falak égtájanként (É, ÉK, K … ÉNy), utána a belső falak;
    a nyílászárók ugyanebben a sorrendben (a falukhoz igazítva). A falfelület a nyílászárókkal csökkentett (nettó) felület. */
+const DEF_NAME=/^Helyiség \d+$/;
+function expName(r){return !r.name||DEF_NAME.test(r.name)?'Helyiség':r.name;}
 function exportXls(){
   const expInt=S.b.expInt!==false;
   const rel=detectRel(),R=n=>Math.round(n*100)/100,byId=id=>S.rooms.find(x=>x.id===id);
   const rooms=[{0:'Típus',1:'Szint',2:'Név kóddal',5:'Magasság (m)',8:'Nettó terület (m²)',13:'Bérelhető térfogat (m³)'}];
-  S.rooms.forEach(r=>{const a=roomArea(r),sc=roomSecCalc(r),h=sc?sc.hAvg:rH(r);rooms.push({0:r.name||'',1:lvlName(lvlOf(r)),2:roomCode(r),5:R(h),8:R(a),13:R(sc?sc.vol:a*h)});}); // padlástérnél: átlagos belmagasság és a metszetből számolt térfogat
+  S.rooms.forEach(r=>{const a=roomArea(r),sc=roomSecCalc(r),h=sc?sc.hAvg:rH(r);rooms.push({0:expName(r),1:lvlName(lvlOf(r)),2:roomCode(r),5:R(h),8:R(sc?sc.area19:a),13:R(sc?sc.vol:a*h)});}); // padlástérnél: 1,90 m feletti terület,: átlagos belmagasság és a metszetből számolt térfogat
   // 1) falszakaszok
   const segs=[];
   S.walls.forEach(w=>{
@@ -2522,7 +2557,7 @@ function exportXls(){
     const code=roomCode(r),a=roomArea(r);
     const edge=segs.filter(sg=>sg.r===r&&sg.ext).reduce((s,sg)=>s+sg.len,0); // padló külső élhossza (belméret)
     // a talajon fekvő padlót a WinWatt nem veszi át helyesen (élhossz) – kézzel kell felvenni; élhossza a helyiség panelen
-    const l=levelSec(lvlOf(r)),P=l&&secProfile(l.section);
+    const l=levelSec(lvlOf(r)),P=l&&secProfile(l.section,l);
     if(P&&!P.err){
       const poly=roomPoly(r),o=secOrigin(l),ax=P.axis,p=P.pts;
       for(let i=0;i<p.length-1;i++){
@@ -2573,7 +2608,7 @@ function printBoxes(){
   let bmHtml=`bm: <b style="display:inline;font-size:1.15em;color:#000">${hs.map(h=>hu(h)).join(' / ')}</b> m`;
   if(hs.length>1){
     bmHtml+=li(hs.filter(h=>h!==r2(b.bm)).map(h=>`${hu(h)} m: ${nums(S.rooms.filter(r=>r2(rH(r))===h))}`));
-  }  {const ls=levelSec(S.curLevel),P=ls&&secProfile(ls.section);
+  }  {const ls=levelSec(S.curLevel),P=ls&&secProfile(ls.section,ls);
    if(P&&!P.err)bmHtml=`bm: <b style="display:inline;font-size:1.15em;color:#000">${hu(P.H)}</b> m (padlásfödém alatt)<br>oldalfal: ${hu(P.hL)} / ${hu(P.hR)} m`;}
 
 
@@ -2706,7 +2741,7 @@ const acts={
   toggleGrid(){$('#chkGrid').checked=!$('#chkGrid').checked;render();},
   toggleDim(){$('#chkDim').checked=!$('#chkDim').checked;render();},
   distoLog(){const txt=distoLogA.length?distoLogA.join('\n'):'(üres – csatlakozz a DISTO gombbal)';const m=$('#modal');m.innerHTML=`<h3><span>DISTO napló</span><button class="btn" id="mClose">✕</button></h3><textarea readonly style="width:100%;height:300px;font:11px monospace">${esc(txt)}</textarea><p class="muted">Ha a mérésindítás nem működik, másold ki és küldd el ezt a szöveget.</p>`;$('#modalWrap').classList.add('open');$('#mClose').onclick=()=>$('#modalWrap').classList.remove('open');},
-  distoCmd(){const v=prompt('DISTO mérésindító parancs (szöveg, pl. g – vagy bájtsor: hex:67 0d 0a). A parancs-csatornára megy (3ab10109 vagy 3ab10120):',S.b.distoCmd||'g');if(v!==null){S.b.distoCmd=v||'g';save();}},
+  distoCmd(){const v=prompt('DISTO mérésindító parancs. Üresen hagyva automatikus: újabb DISTO (D2-2, X3, X4): raiseEvent 10 · régebbi (D110, D2, D510): g. Bájtsor is megadható: hex:67 0d 0a',S.b.distoCmd||'');if(v!==null){S.b.distoCmd=v.trim();save();}},
   defTh10(){S.b.defTh=0.10;save();updateTopInfo();},
   defTh12(){S.b.defTh=0.12;save();updateTopInfo();},
   defTh30(){S.b.defTh=0.30;save();updateTopInfo();},
@@ -2799,8 +2834,11 @@ async function distoTrigger(){
   }
   try{
     // parancs: szöveg (pl. g), vagy hex:… bájtsor (pl. hex:67 0d 0a)
-    const cmd=S.b.distoCmd||'g';
-    const data=/^hex:/i.test(cmd)?new Uint8Array(cmd.slice(4).trim().split(/[\s,]+/).filter(Boolean).map(h=>parseInt(h,16))):new TextEncoder().encode(cmd);
+    // újabb DISTO (D2-2, X3/X4 – DistoCom, 3ab10120): "raiseEvent 10" + CRLF (Leica SDK: DistanceDistoCom); régebbi (3ab10109): "g"
+    const dc=String(distoCmdChar.uuid).toLowerCase().startsWith('3ab10120');
+    let cmd=S.b.distoCmd||'';if(!cmd||(dc&&cmd==='g')||(!dc&&/^raiseEvent/i.test(cmd)))cmd=dc?'raiseEvent 10':'g';
+    const txt=cmd.replace(/\\r/g,'\r').replace(/\\n/g,'\n');
+    const data=/^hex:/i.test(cmd)?new Uint8Array(cmd.slice(4).trim().split(/[\s,]+/).filter(Boolean).map(h=>parseInt(h,16))):new TextEncoder().encode(dc&&!/[\r\n]$/.test(txt)?txt+'\r\n':txt);
     dlog('Indító parancs ('+String(distoCmdChar.uuid).toLowerCase().slice(4,8)+'): '+cmd);
     const p=distoCmdChar.properties;
     if(p.write&&distoCmdChar.writeValueWithResponse)await distoCmdChar.writeValueWithResponse(data);
@@ -2853,14 +2891,16 @@ $('#btnDisto').onclick=async()=>{
         await c.startNotifications();
         c.addEventListener('characteristicvaluechanged',ev=>{
           const dv=ev.target.value,f=dv.byteLength>=4?dv.getFloat32(0,true):NaN;
-          dlog(sid(c)+': '+hex(dv)+(Number.isFinite(f)?' = '+f.toFixed(4):''));
+          const by=new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength),asc=by.length&&by.every(b=>b===9||b===10||b===13||(b>=32&&b<127))?' "'+String.fromCharCode(...by).trim()+'"':'';
+          dlog(sid(c)+': '+hex(dv)+(asc||(Number.isFinite(f)?' = '+f.toFixed(4):'')));
           if(c===distC&&Number.isFinite(f)&&f>0.001&&f<400)onDisto(f);
         });
       }catch(e){dlog('Feliratkozás hiba '+sid(c)+': '+errTxt(e));}
     }
     distoChar=distC||cs[0]||null;
     distoCmdChar=null;
-    for(const id of DISTO_CMD_IDS){const c=cs.find(x=>lu(x).startsWith(id)&&(x.properties.write||x.properties.writeWithoutResponse));if(c){distoCmdChar=c;break;}}
+    const ids=distC&&lu(distC).startsWith('3ab1010d')?['3ab10120','3ab10109']:DISTO_CMD_IDS; // DistoCom-os DISTO: a 0120-as csatorna
+    for(const id of ids){const c=cs.find(x=>lu(x).startsWith(id)&&(x.properties.write||x.properties.writeWithoutResponse));if(c){distoCmdChar=c;break;}}
     dlog(distoCmdChar?'Parancs-csatorna: '+sid(distoCmdChar):'Nincs parancs-csatorna');
     dev.addEventListener('gattserverdisconnected',()=>{dlog('Kapcsolat megszakadt');distoChar=null;distoCmdChar=null;$('#btnDisto').classList.remove('active');if(measureMode)updMeasOv();});
     $('#btnDisto').classList.add('active');
