@@ -105,6 +105,9 @@ tr.selrow{background:#1e3a8a55}
 #measOv .mo-btns button{background:#374151;color:#fff;border:1px solid #6b7280;border-radius:8px;padding:8px 12px;font-size:14px}
 #measOv .mo-hint{margin-top:auto;margin-bottom:40px;font-size:22px;font-weight:600;color:#fff;text-shadow:0 1px 4px #000}
 #measOv.busy .mo-hint{color:#fde68a}
+#moWall{display:none;grid-template-columns:repeat(3,72px);gap:8px;justify-content:center;margin-top:10px}
+#moWall button{height:64px;font-size:30px;background:#1f2937;color:#fff;border:1px solid #f87171;border-radius:10px}
+#moWall .mo-close{grid-column:1/4;height:48px;font-size:18px;background:#2563eb;border-color:#60a5fa}
 #modal{background:var(--p);border:1px solid var(--bd);border-radius:8px;padding:14px;width:340px;max-width:94vw;max-height:94vh;overflow:auto;box-shadow:0 12px 36px #000b}
 #modal.wide{width:820px}
 .sectab{border-collapse:collapse;font-size:12px;width:100%;margin-top:6px}.sectab td,.sectab th{border-bottom:1px solid var(--bd);padding:2px 4px;text-align:right}.sectab td:first-child,.sectab th:first-child{text-align:left}
@@ -310,6 +313,7 @@ textarea{resize:vertical}
   <div id="moTarget" class="muted"></div>
   <div id="moVal">—</div>
   <div class="mo-btns"><button id="moPrev">◀ Előző mező</button><button id="moNext">Következő mező ▶</button><button id="moExit">✕ Kilépés</button></div>
+  <div id="moWall"><span></span><button data-mdir="270">↑</button><span></span><button data-mdir="180">←</button><button id="moWUndo">↶</button><button data-mdir="0">→</button><span></span><button data-mdir="90">↓</button><span></span><button id="moWClose" class="mo-close">Lezár</button></div>
 </div><div class="mo-hint" id="moHint">Érintsd meg a képernyőt a méréshez</div></div>
 <div id="printArea"></div>
 <input id="fileIn" type="file" accept=".json,application/json,text/plain" style="display:none">
@@ -2797,11 +2801,27 @@ function targetLabel(el){
   return `Cél: ${ttl?ttl.textContent+' – ':''}${lab?lab.textContent:el.id}`;
 }
 function curTarget(){return lastDistoId&&document.getElementById(lastDistoId);}
+let wallDir=null; // fallánc mérés: a megnyomott irány, amerre a következő szakasz megy
+const AUTO_OK={rmH:'#mOk',mH:'#mOk'}; // ezek kitöltése után az ablak magától bezárul
+function modalOpen(){return $('#modalWrap').classList.contains('open');}
+function autoOk(el){
+  const b=el&&AUTO_OK[el.id];if(!b)return;
+  setTimeout(()=>{if(measureMode)stopMeasure();const ok=$(b);if(ok&&modalOpen())ok.click();},450);
+}
 function updMeasOv(){
+  const wm=tool==='wall'&&!modalOpen();
+  $('#moWall').style.display=wm?'grid':'none';
+  if(wm){$('#moTarget').textContent=draft.length?'Fallánc: nyomd meg az irányt → mér és rajzol':'Fallánc: előbb koppints a kezdősarokra a rajzon';return;}
   $('#moTarget').textContent=targetLabel(curTarget());
   $('#moStat').textContent=distoChar?(distoCmdChar?'DISTO csatlakozva':'DISTO csatlakozva (indítás csak a műszeren)'):'nincs BLE kapcsolat – billentyűzet módú DISTO vagy kézi DIST gomb';
 }
 function onDisto(val){
+  // fallánc mérés módban: a megnyomott irányba új szakasz a mért hosszal
+  if(tool==='wall'&&wallDir!==null&&draft.length>=1){
+    addSegDir(wallDir,val);wallDir=null;updSegBox();
+    if(measureMode){clearTimeout(measWait);$('#measOv').classList.remove('busy');$('#moVal').textContent=hu(val,3,true)+' m';$('#moHint').textContent=`${draft.length-1}. szakasz kész – következő irány, vagy Lezár`;}
+    return;
+  }
   // fal rajzolása közben: a mérés az utolsó szakasz valós hossza
   if(tool==='wall'&&draft.length>=2&&!(document.activeElement&&document.activeElement.matches&&document.activeElement.matches('input')&&document.activeElement.id!=='segLen')){
     applySegLen(val);$('#segLen').value=val.toFixed(2);if(measureMode){$('#moVal').textContent=hu(val,3,true)+' m';$('#moHint').textContent='Szakasz beállítva – koppints a következő pontra';}return;
@@ -2809,11 +2829,13 @@ function onDisto(val){
   if(measureMode){
     clearTimeout(measWait);$('#measOv').classList.remove('busy');
     $('#moVal').textContent=hu(val,3,true)+' m';
-    const el=curTarget();
+    let el=curTarget();
+    if(modalOpen()&&(!el||!el.closest('#modal'))){el=$('#modal input[data-disto]');if(el)lastDistoId=el.id;}
     if(el){
       const list=distoFields(el),i=list.indexOf(el),nextId=list[i+1]?list[i+1].id:null;
       el.value=val.toFixed(2);el.dispatchEvent(new Event('change',{bubbles:true}));
       if(nextId&&document.getElementById(nextId))lastDistoId=nextId;
+      autoOk(el);
     }else $('#distVal').value=val.toFixed(3);
     $('#moHint').textContent='Érintsd meg a képernyőt a következő méréshez';
     updMeasOv();return;
@@ -2825,6 +2847,7 @@ function onDisto(val){
     ae.value=val.toFixed(2);
     ae.dispatchEvent(new Event('change',{bubbles:true}));
     if(nextId){const n=document.getElementById(nextId);if(n){n.focus();n.select&&n.select();}}
+    autoOk(ae);
   }else $('#distVal').value=val.toFixed(3);
 }
 async function distoTrigger(){
@@ -2857,6 +2880,14 @@ function stopMeasure(){measureMode=false;$('#measOv').classList.remove('on','bus
 $('#btnMeas').onclick=()=>measureMode?stopMeasure():startMeasure();
 $('#measOv').addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;e.preventDefault();distoTrigger();});
 $('#moExit').onclick=e=>{e.stopPropagation();stopMeasure();};
+$$('#moWall [data-mdir]').forEach(b=>b.addEventListener('pointerdown',e=>{
+  e.stopPropagation();e.preventDefault();
+  if(!draft.length){$('#moHint').textContent='Előbb koppints a kezdősarokra a rajzon (lépj ki a mérésből)';return;}
+  wallDir=+b.dataset.mdir;
+  if(distoCmdChar)distoTrigger();else $('#moHint').textContent='Mérj a DIST gombbal ('+b.textContent+')';
+}));
+$('#moWUndo').addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();wallDir=null;$('#segUndo').click();updMeasOv();});
+$('#moWClose').addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();wallDir=null;stopMeasure();$('#segClose').click();});
 const moStep=d=>{const el=curTarget(),list=distoFields(el);if(!list.length)return;let i=list.indexOf(el);i=i<0?0:Math.max(0,Math.min(list.length-1,i+d));lastDistoId=list[i].id;updMeasOv();};
 $('#moPrev').onclick=e=>{e.stopPropagation();moStep(-1);};
 $('#moNext').onclick=e=>{e.stopPropagation();moStep(1);};
@@ -2939,7 +2970,9 @@ $('#segLen').addEventListener('keydown',e=>{if(e.key==='Enter'){applySegLen(pf($
 $('#segLen').addEventListener('change',e=>{if(e.isTrusted===false)applySegLen(pf($('#segLen').value));});
 $$('#segBox [data-dir]').forEach(b=>b.onclick=()=>addSegDir(+b.dataset.dir,pf($('#segLen').value)));
 $('#segUndo').onclick=()=>{draft.pop();guides=[];render();};
-$('#segClose').onclick=()=>{if(draft.length>=3){addPolyRoom(draft);draft=[];guides=[];render();}else alert('Legalább 3 pont kell.');};$('#chkGhost').onchange=()=>render();
+$('#segClose').onclick=()=>{
+  if(draft.length>=4){const a=draft[0],z=draft[draft.length-1],g=Math.hypot(z.x-a.x,z.y-a.y);if(g<0.25){draft.pop();showHint(`Záróhiba: ${Math.round(g*100)} cm (az utolsó pont a kezdőpontra került)`);}}
+  if(draft.length>=3){addPolyRoom(draft);draft=[];guides=[];render();}else alert('Legalább 3 pont kell.');};$('#chkGhost').onchange=()=>render();
 })();
 </script>
 </body>
