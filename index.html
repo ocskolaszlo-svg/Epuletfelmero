@@ -165,6 +165,7 @@ textarea{resize:vertical}
     <span class="mi" data-menu>Fájl
       <span class="drop">
         <button data-act="newDoc">Új felmérés</button>
+        <button data-act="projects">Felmérések… (váltás)</button>
         <button data-act="saveJson">Mentés (.json)</button>
         <button data-act="loadJson">Betöltés (.json)</button>
         <hr>
@@ -362,6 +363,7 @@ const DEFAULT_OPS=[
   {type:'Átjáró',alt:'',ow:0.9,oh:2.1,sh:0,pm:0}
 ];
 
+const PIDX='ef_projects',PCUR='ef_cur';let curPid=null; // több felmérés tárolása
 let S=loadState();
 let tool='select',tab='props';
 let selWalls=new Set(),selRoom=null,selOp=null;
@@ -397,9 +399,21 @@ function normalize(p){
   if(!p.levels.some(l=>l.id===p.curLevel))p.curLevel=p.levels[0].id;
   return p;
 }
+/* Több felmérés a készüléken: mindegyik külön tárolva, a Fájl → Felmérések… listából válthatók */
+function PK(id){return 'ef_p_'+id;}
+function projList(){try{return JSON.parse(localStorage.getItem(PIDX))||[];}catch(e){return [];}}
+function projSaveList(l){try{localStorage.setItem(PIDX,JSON.stringify(l));}catch(e){}}
 function loadState(){
   try{
-    const raw=localStorage.getItem(SK)||localStorage.getItem(SK_OLD);
+    let l=projList();curPid=localStorage.getItem(PCUR);
+    if(!l.length){ // első indítás az új verzióval: a meglévő rajz lesz az első felmérés
+      const raw=localStorage.getItem(SK)||localStorage.getItem(SK_OLD);
+      curPid=Math.random().toString(36).slice(2,9);
+      if(raw){localStorage.setItem(PK(curPid),raw);}
+      l=[{id:curPid,name:'',ts:Date.now()}];projSaveList(l);localStorage.setItem(PCUR,curPid);
+    }
+    if(!curPid||!l.some(x=>x.id===curPid)){curPid=l[0].id;localStorage.setItem(PCUR,curPid);}
+    const raw=localStorage.getItem(PK(curPid));
     if(raw){
       const p=JSON.parse(raw);
       if(p&&Array.isArray(p.walls))return normalize(p);
@@ -407,7 +421,46 @@ function loadState(){
   }catch(e){}
   return defState();
 }
-function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
+function projName(st){const b=(st&&st.b)||{};return b.addr||b.cust||'Névtelen felmérés';}
+function save(){
+  try{localStorage.setItem(PK(curPid),JSON.stringify(S));}catch(e){alert('A tárhely megtelt – ments .json-be, és törölj régi felméréseket (Fájl → Felmérések…).');return;}
+  const l=projList(),p=l.find(x=>x.id===curPid);
+  if(p){p.name=projName(S);p.ts=Date.now();}else l.push({id:curPid,name:projName(S),ts:Date.now()});
+  projSaveList(l);
+}
+function switchProj(id,st){
+  save();curPid=id;localStorage.setItem(PCUR,id);
+  if(st)S=st;else{try{S=normalize(JSON.parse(localStorage.getItem(PK(id))));}catch(e){S=defState();}}
+  undoStack=[];redoStack=[];selWalls.clear();selRoom=null;selOp=null;draft=[];guides=[];
+  save();updExpIntLbl();updBeepLbl();updateTopInfo();updateLevelBtn();acts.fitView();render();panel();
+}
+function newProj(st){switchProj(Math.random().toString(36).slice(2,9),st||defState());}
+function openProjModal(){
+  const m=$('#modal'),l=projList().sort((a,b)=>b.ts-a.ts),d=t=>new Date(t).toLocaleString('hu-HU',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  m.innerHTML=`<h3><span>Felmérések ezen a készüléken</span><button class="btn" id="mClose">✕</button></h3>
+    <table style="width:100%">${l.map(p=>`<tr data-pid="${p.id}" style="${p.id===curPid?'background:#1e3a8a55':''}">
+      <td style="padding:6px 4px"><b>${esc(p.name||'Névtelen felmérés')}</b>${p.id===curPid?' <span class="muted">(megnyitva)</span>':''}<br><span class="muted">${d(p.ts)}</span></td>
+      <td style="text-align:right;white-space:nowrap">${p.id===curPid?'':'<button class="btn pri" data-a="open">Megnyitás</button> '}<button class="btn dan" data-a="del">Törlés</button></td></tr>`).join('')}</table>
+    <div class="row" style="margin-top:10px"><button class="btn pri" id="pjNew">+ Új felmérés</button></div>
+    <p class="muted">A felmérések a készüléken, ebben a böngészőben tárolódnak, váltáskor semmi nem vész el. Fontos munkát azért mentsd .json-be is (Fájl → Mentés).</p>`;
+  $('#modalWrap').classList.add('open');
+  const close=()=>$('#modalWrap').classList.remove('open');
+  $('#mClose').onclick=close;
+  $('#pjNew').onclick=()=>{close();newProj();};
+  m.querySelectorAll('tr[data-pid]').forEach(tr=>{
+    const id=tr.dataset.pid;
+    tr.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
+      if(b.dataset.a==='open'){close();switchProj(id);}
+      else{
+        const p=projList().find(x=>x.id===id);
+        if(!confirm(`Biztosan törlöd: „${p&&p.name||'Névtelen felmérés'}”? Ez nem vonható vissza.`))return;
+        localStorage.removeItem(PK(id));projSaveList(projList().filter(x=>x.id!==id));
+        if(id===curPid){const r=projList();if(r.length)switchProj(r[0].id);else newProj();}
+        openProjModal();
+      }
+    });
+  });
+}
 function uid(){return Math.random().toString(36).slice(2,9);}
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function r2(n){return Math.round(n*100)/100;}
@@ -1227,25 +1280,29 @@ function recentAlts(type){
 }
 
 /* Saját számbillentyűzet a méretmezőkhöz (data-disto): az iPad billentyűzete nem ugrik fel */
-let padEl=null,padFresh=true,padTimer=null,padLast={id:null,t:0};
-function padTarget(){const a=document.activeElement;return a&&a.matches&&a.matches('input[data-disto]')?a:null;}
+let padEl=null,padFresh=true,padTimer=null,padLast={id:null,t:0},padCur=null;
+// a célmező az utoljára megérintett méretmező – iPaden a gombnyomás elveheti a fókuszt, ezért nem az aktív elemre támaszkodunk
+function padTarget(){const a=document.activeElement;if(a&&a.matches&&a.matches('input[data-disto]'))return a;return padCur&&document.contains(padCur)?padCur:null;}
 function buildPad(){
   padEl=document.createElement('div');padEl.id='numPad';
   const keys=['7','8','9','⌫','4','5','6','C','1','2','3','±',',','0','00','OK'];
   padEl.innerHTML=keys.map(k=>`<button data-k="${k}" class="${k==='OK'?'pk-ok':''}">${k==='OK'?'Tovább ↵':k}</button>`).join('');
   document.body.appendChild(padEl);
   padEl.addEventListener('pointerdown',e=>{e.preventDefault();}); // a mező fókuszban marad
+  padEl.addEventListener('touchstart',e=>{e.preventDefault();},{passive:false}); // iOS: ne vegye el a fókuszt
+  padEl.addEventListener('mousedown',e=>{e.preventDefault();});
   padEl.querySelectorAll('button').forEach(b=>b.addEventListener('pointerup',e=>{e.preventDefault();padKey(b.dataset.k);}));
 }
 function padKey(k){
-  const el=padTarget();if(!el)return;
+  const el=padTarget();if(!el){hidePad();return;}
   let v=padFresh?'':String(el.value);
   if(k==='OK'){
     const list=distoFields(el),i=list.indexOf(el),nextId=list[i+1]?list[i+1].id:null;
     el.dispatchEvent(new Event('change',{bubbles:true}));
     el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
-    if(el.id==='segLen'){el.blur();hidePad();return;}
-    if(document.activeElement===el||!document.contains(el)){const n=nextId&&document.getElementById(nextId);if(n){n.focus();}else{el.blur&&el.blur();hidePad();}}
+    if(el.id==='segLen'){el.blur();padCur=null;hidePad();return;}
+    if(document.contains(el)){const n=nextId&&document.getElementById(nextId);if(n){n.focus();padCur=n;padFresh=true;}else{el.blur&&el.blur();padCur=null;hidePad();}}
+    else{padCur=null;hidePad();}
     return;
   }
   if(k==='⌫')v=String(el.value).slice(0,-1);
@@ -1259,8 +1316,17 @@ function padKey(k){
 function showPad(){if(!padEl)buildPad();padEl.classList.add('on');}
 function hidePad(){if(padEl)padEl.classList.remove('on');}
 // iPaden egy gombnyomás is újrafókuszálhatja a mezőt: ilyenkor NEM kezdjük elölről a beírást
-document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-disto]')){clearTimeout(padTimer);if(!(padLast.id===e.target.id&&Date.now()-padLast.t<4000))padFresh=true;showPad();}});
-document.addEventListener('focusout',e=>{if(e.target.matches&&e.target.matches('input[data-disto]'))padTimer=setTimeout(()=>{if(!padTarget())hidePad();},150);});
+document.addEventListener('focusin',e=>{
+  if(e.target.matches&&e.target.matches('input[data-disto]')){clearTimeout(padTimer);if(!(padCur===e.target||(padLast.id===e.target.id&&Date.now()-padLast.t<4000)))padFresh=true;padCur=e.target;showPad();}
+  else if(e.target.matches&&e.target.matches('input,select,textarea')){padCur=null;hidePad();}
+});
+// a billentyűzet csak akkor tűnik el, ha máshova koppintasz (nem a billentyűzetre és nem a mezőre), vagy a mező eltűnt
+document.addEventListener('pointerdown',e=>{
+  if(!padEl||!padEl.classList.contains('on'))return;
+  if(padEl.contains(e.target)||(e.target.matches&&e.target.matches('input[data-disto]')))return;
+  padTimer=setTimeout(()=>{const a=document.activeElement;if(!(a&&a.matches&&a.matches('input[data-disto]'))){padCur=null;hidePad();}},200);
+},true);
+setInterval(()=>{if(padEl&&padEl.classList.contains('on')&&!padTarget()){padCur=null;hidePad();}},700);
 
 /* Helyiségek újraszámozása: a koppintás sorrendje adja az új sorszámot (1, 2, 3…), a többi utána, eredeti sorrendben */
 let numMode=null;
@@ -2665,7 +2731,7 @@ function _buildPrint(){
       <div class="p-cust"><b>Megrendelő:</b> ${esc(b.cust)}</div>
       <div class="p-prop"><b>Ingatlan címe:</b> ${esc(b.addr)}${S.levels.length>1?` &nbsp;·&nbsp; <b>Szint:</b> ${esc(curLvl().name)}`:''}</div>
       <div class="p-plan"><svg id="printSvg" xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" style="width:100%;height:100%"></svg>
-        <div class="p-legend">${hatchLegend()}<br>Kotta: belméretek [m] · falvastagság [cm] · zárójelben a helyiségek sorszáma</div></div>
+        <div class="p-legend">${hatchLegend()}<br>Kotta: belméretek [m] · falvastagság [cm] · zárójelben a helyiségek sorszáma<br><b>A rajz tájékoztató jellegű, energetikai felmérés céljából készült.</b></div></div>
     </div>
     <div class="p-right">${printBoxes()}</div>`;
   render($('#printSvg'),true);
@@ -2698,7 +2764,7 @@ function _buildPlanPrint(){
         ${S.levels.length>1?`<div><b>Szint:</b>${esc(curLvl().name)}</div>`:''}
       </div>
       <div class="pp-plan"><svg id="printSvg" xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" style="${levelSec(S.curLevel)?(land?'width:calc(100% - 78mm);height:100%':'width:100%;height:calc(100% - 62mm)'):'width:100%;height:100%'}"></svg>
-        <div class="p-legend">${hatchLegend()}<br>Kotta: belméretek [m] · falvastagság [cm]</div>
+        <div class="p-legend">${hatchLegend()}<br>Kotta: belméretek [m] · falvastagság [cm]<br><b>A rajz tájékoztató jellegű, energetikai felmérés céljából készült.</b></div>
         ${(()=>{const l=levelSec(S.curLevel);return l?`<div class="p-secbox"><b>Padlástér metszet</b>${sectionSvg(l,'100%','32mm',true)}${secSummaryHtml(l)}</div>`:'';})()}</div>
     </div>`;
   render($('#printSvg'),true);
@@ -2724,7 +2790,8 @@ function deliver(blob,name){
   function dl(){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},4000);}
 }
 const acts={
-  newDoc(){if(confirm('Új üres felmérés?')){snapshot();S=defState();selWalls.clear();selRoom=null;selOp=null;save();render();panel();}},
+  newDoc(){newProj();},
+  projects(){openProjModal();},
   saveJson(){deliver(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),`${fileBase()}_${stamp()}.json`);},
   loadJson(){$('#fileIn').click();},
   exportXls,printA4,printPlan,undo,redo,
@@ -2764,7 +2831,7 @@ const acts={
 };
 $('#fileIn').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
-  const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(!p||!Array.isArray(p.walls))throw 0;snapshot();S=normalize(p);selWalls.clear();selRoom=null;selOp=null;save();render();panel();}catch{alert('Hibás JSON fájl');}};rd.readAsText(f);
+  const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(!p||!Array.isArray(p.walls))throw 0;newProj(normalize(p));}catch{alert('Hibás JSON fájl');}e.target.value='';};rd.readAsText(f);
 };
 $$('.mi').forEach(m=>m.onclick=e=>{e.stopPropagation();const o=m.classList.contains('open');closePops();if(!o)m.classList.add('open');});
 window.addEventListener('click',closePops);
