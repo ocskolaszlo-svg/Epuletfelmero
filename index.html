@@ -205,6 +205,7 @@ textarea{resize:vertical}
     <span class="mi" data-menu>Beállítások
       <span class="drop">
         <button data-act="distoCmd">DISTO mérésindító parancs…</button>
+        <button data-act="toggleBeep" id="mnBeep">Hangjelzés méréskor: be</button>
         <button data-act="distoLog">DISTO napló</button>
         <hr>
         <button data-act="defTh10">Rajzolási falvastagság: 10 cm (vázlat)</button>
@@ -1226,7 +1227,7 @@ function recentAlts(type){
 }
 
 /* Saját számbillentyűzet a méretmezőkhöz (data-disto): az iPad billentyűzete nem ugrik fel */
-let padEl=null,padFresh=true,padTimer=null;
+let padEl=null,padFresh=true,padTimer=null,padLast={id:null,t:0};
 function padTarget(){const a=document.activeElement;return a&&a.matches&&a.matches('input[data-disto]')?a:null;}
 function buildPad(){
   padEl=document.createElement('div');padEl.id='numPad';
@@ -1252,12 +1253,13 @@ function padKey(k){
   else if(k==='±')v=String(el.value).startsWith('-')?String(el.value).slice(1):'-'+el.value;
   else if(k===','){if(!v.includes('.'))v=(v||'0')+'.';}
   else v+=k;
-  padFresh=false;
+  padFresh=false;padLast={id:el.id,t:Date.now()};
   el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));
 }
 function showPad(){if(!padEl)buildPad();padEl.classList.add('on');}
 function hidePad(){if(padEl)padEl.classList.remove('on');}
-document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-disto]')){clearTimeout(padTimer);padFresh=true;showPad();}});
+// iPaden egy gombnyomás is újrafókuszálhatja a mezőt: ilyenkor NEM kezdjük elölről a beírást
+document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-disto]')){clearTimeout(padTimer);if(!(padLast.id===e.target.id&&Date.now()-padLast.t<4000))padFresh=true;showPad();}});
 document.addEventListener('focusout',e=>{if(e.target.matches&&e.target.matches('input[data-disto]'))padTimer=setTimeout(()=>{if(!padTarget())hidePad();},150);});
 
 /* Helyiségek újraszámozása: a koppintás sorrendje adja az új sorszámot (1, 2, 3…), a többi utána, eredeti sorrendben */
@@ -2745,6 +2747,7 @@ const acts={
   toggleGrid(){$('#chkGrid').checked=!$('#chkGrid').checked;render();},
   toggleDim(){$('#chkDim').checked=!$('#chkDim').checked;render();},
   distoLog(){const txt=distoLogA.length?distoLogA.join('\n'):'(üres – csatlakozz a DISTO gombbal)';const m=$('#modal');m.innerHTML=`<h3><span>DISTO napló</span><button class="btn" id="mClose">✕</button></h3><textarea readonly style="width:100%;height:300px;font:11px monospace">${esc(txt)}</textarea><p class="muted">Ha a mérésindítás nem működik, másold ki és küldd el ezt a szöveget.</p>`;$('#modalWrap').classList.add('open');$('#mClose').onclick=()=>$('#modalWrap').classList.remove('open');},
+  toggleBeep(){S.b.beep=S.b.beep===false;save();updBeepLbl();if(S.b.beep!==false)beep(true);},
   distoCmd(){const v=prompt('DISTO mérésindító parancs. Üresen hagyva automatikus: újabb DISTO (D2-2, X3, X4): raiseEvent 10 · régebbi (D110, D2, D510): g. Bájtsor is megadható: hex:67 0d 0a',S.b.distoCmd||'');if(v!==null){S.b.distoCmd=v.trim();save();}},
   defTh10(){S.b.defTh=0.10;save();updateTopInfo();},
   defTh12(){S.b.defTh=0.12;save();updateTopInfo();},
@@ -2787,6 +2790,22 @@ $('#btnApplyDist').onclick=()=>{
    BLE (app) mód: a távolság a 3ab10101 csatornán érkezik; mérés indítása a 3ab10109 parancs-csatornára küldött
    karakterrel (alapból "g"). Billentyűzet (HID) módban a DISTO begépeli az értéket – mérés módban ezt is elkapjuk. */
 const DISTO_SVC='3ab10100-f831-4395-b29d-570977d5bf94',DISTO_DIST='3ab10101-f831-4395-b29d-570977d5bf94',DISTO_CMD='3ab10109-f831-4395-b29d-570977d5bf94';
+/* Hangjelzés: sikeres mérés = rövid magas csippanás, sikertelen = két mély búgás */
+let actx=null;
+function audioUnlock(){try{if(!actx){const A=window.AudioContext||window.webkitAudioContext;if(A)actx=new A();}if(actx&&actx.state==='suspended')actx.resume();}catch(e){}}
+document.addEventListener('pointerdown',audioUnlock,true);
+function tone(f,t0,d,type,vol){const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.value=f;
+  g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(vol,t0+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t0+d);
+  o.connect(g);g.connect(actx.destination);o.start(t0);o.stop(t0+d+0.02);}
+function beep(ok){
+  if(S.b.beep===false)return;audioUnlock();if(!actx)return;
+  try{const t=actx.currentTime+0.01;
+    if(ok)tone(1760,t,0.09,'sine',0.35);
+    else{tone(220,t,0.18,'square',0.18);tone(180,t+0.24,0.22,'square',0.18);}
+    if(navigator.vibrate)navigator.vibrate(ok?40:[120,80,120]);
+  }catch(e){}
+}
+function updBeepLbl(){const b=$('#mnBeep');if(b)b.textContent='Hangjelzés méréskor: '+(S.b.beep===false?'ki':'be');}
 let distoCmdChar=null,measureMode=false,lastDistoId=null,kbBuf='',measWait=null;
 // napló a DISTO-kapcsolathoz (Beállítások → DISTO napló): eszköznév, csatornák, beérkező adatok, hibák
 const distoLogA=[];
@@ -2816,6 +2835,7 @@ function updMeasOv(){
   $('#moStat').textContent=distoChar?(distoCmdChar?'DISTO csatlakozva':'DISTO csatlakozva (indítás csak a műszeren)'):'nincs BLE kapcsolat – billentyűzet módú DISTO vagy kézi DIST gomb';
 }
 function onDisto(val){
+  beep(true);
   // fallánc mérés módban: a megnyomott irányba új szakasz a mért hosszal
   if(tool==='wall'&&wallDir!==null&&draft.length>=1){
     addSegDir(wallDir,val);wallDir=null;updSegBox();
@@ -2868,8 +2888,12 @@ async function distoTrigger(){
     else if(p.writeWithoutResponse&&distoCmdChar.writeValueWithoutResponse)await distoCmdChar.writeValueWithoutResponse(data);
     else await distoCmdChar.writeValue(data);
     $('#measOv').classList.add('busy');$('#moHint').textContent='Mérés…';
-    clearTimeout(measWait);measWait=setTimeout(()=>{$('#measOv').classList.remove('busy');$('#moHint').textContent='Nem jött mérés – próbáld újra, vagy nyomd meg a DIST gombot';},6000);
-  }catch(err){dlog('Indítás hiba: '+errTxt(err));$('#moHint').textContent='Indítás sikertelen ('+errTxt(err)+') – nyomd meg a DIST gombot';}
+    clearTimeout(measWait);measWait=setTimeout(()=>{$('#measOv').classList.remove('busy');$('#moHint').textContent='Nem jött mérés – próbáld újra, vagy nyomd meg a DIST gombot';beep(false);},6000);
+  }catch(err){dlog('Indítás hiba: '+errTxt(err));$('#moHint').textContent='Indítás sikertelen ('+errTxt(err)+') – nyomd meg a DIST gombot';beep(false);}
+}
+function measFail(why){
+  clearTimeout(measWait);beep(false);
+  if(measureMode){$('#measOv').classList.remove('busy');$('#moHint').textContent='Sikertelen mérés ('+why+') – próbáld újra';}
 }
 function startMeasure(){
   measureMode=true;kbBuf='';$('#measOv').classList.add('on');$('#btnMeas').classList.add('active');
@@ -2924,7 +2948,8 @@ $('#btnDisto').onclick=async()=>{
           const dv=ev.target.value,f=dv.byteLength>=4?dv.getFloat32(0,true):NaN;
           const by=new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength),asc=by.length&&by.every(b=>b===9||b===10||b===13||(b>=32&&b<127))?' "'+String.fromCharCode(...by).trim()+'"':'';
           dlog(sid(c)+': '+hex(dv)+(asc||(Number.isFinite(f)?' = '+f.toFixed(4):'')));
-          if(c===distC&&Number.isFinite(f)&&f>0.001&&f<400)onDisto(f);
+          if(c===distC){if(Number.isFinite(f)&&f>0.001&&f<400)onDisto(f);else measFail('érvénytelen mérés');}
+          else if(asc&&/err|@E|fail|timeout/i.test(asc))measFail(asc.trim()); // DISTO hibaüzenet (pl. túl messze, túl világos)
         });
       }catch(e){dlog('Feliratkozás hiba '+sid(c)+': '+errTxt(e));}
     }
@@ -2960,7 +2985,7 @@ try{fitFlexRooms();}catch(e){}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 updateTopInfo();updateUndoBtns();updateLevelBtn();render();panel();
 function updExpIntLbl(){const m=$('#mnExpInt');if(m)m.textContent='Belső szerkezetek exportja: '+(S.b.expInt===false?'ki':'be');}
-updExpIntLbl();
+updExpIntLbl();updBeepLbl();
 $('#btnLevel').onclick=openLevelsModal;
 $('#btnNum').onclick=()=>numMode?numStop():numStart();
 $('#numStop').onclick=numStop;
