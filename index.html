@@ -1261,6 +1261,7 @@ function openSectionModal(){
   m.innerHTML=`<h3><span>Padlástér metszet – ${esc(l.name)}</span><button class="btn" id="mClose">✕</button></h3>
     <div style="display:flex;gap:14px;flex-wrap:wrap">
     <div style="min-width:280px;flex:1">
+      ${S.levels.length>1?`<div class="row"><label>Melyik szint?</label><select id="sc_lvl">${S.levels.map(x=>`<option value="${x.id}" ${x.id===l.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>`:''}
       <div class="row"><label>Metszet iránya</label><select id="sc_axis"><option value="x" ${sec.axis==='x'?'selected':''}>vízszintes ↔ (rajzon balról jobbra)</option><option value="y" ${sec.axis==='y'?'selected':''}>függőleges ↕ (fentről lefelé)</option></select></div>
       <div class="row"><label>Teljes szélesség (m)</label><input id="sc_W" data-disto type="text" inputmode="none" autocomplete="off" value="${sec.W??''}" placeholder="—"><button class="btn" id="scFromPlan" title="A rajz belső szélességéből (köztes falakkal együtt)">rajzból</button></div>
       ${f('hL','Bal oldalfal (m)','térdfal magassága')}
@@ -1294,7 +1295,12 @@ function openSectionModal(){
   $('#mClose').onclick=$('#mCancel').onclick=close;
   $('#scMeas').onclick=()=>{if(!curTarget()||!curTarget().id.startsWith('sc_'))lastDistoId='sc_W';startMeasure();};
   if($('#scDel'))$('#scDel').onclick=()=>{if(confirm('Metszet törlése?')){snapshot();l.section=null;save();close();}};
-  $('#mOk').onclick=()=>{snapshot();l.section=read();secCache.clear();save();close();};
+  $('#mOk').onclick=()=>{
+    const tid=$('#sc_lvl')?$('#sc_lvl').value:l.id,tl=S.levels.find(x=>x.id===tid)||l;
+    if(tl!==l&&tl.section&&!confirm(`A(z) ${tl.name} szinten már van metszet. Felülírod?`))return;
+    snapshot();const sec=read();if(tl!==l)l.section=null;tl.section=sec;secCache.clear();save();close();
+    if(tl!==l){setLevel(tl.id);showHint(`A metszet átkerült: ${tl.name}`);}
+  };
   prev();
 }
 
@@ -1787,8 +1793,11 @@ function render(targetSvg=svg,isPrint=false){
         const ex=hx,ey=hy+o.ow*sy;
         const tx=hx+o.ow*sx,ty=hy;
         const dc=sel?'#f59e0b':(isPrint?'#000':'#fbbf24');
-        el('line',{x1:hx,y1:hy,x2:ex,y2:ey,stroke:dc,'stroke-width':isPrint?0.015:px*1.8},grp);
-        el('path',{d:`M${ex},${ey} A${o.ow},${o.ow} 0 0 ${(sx*sy>0?0:1)} ${tx},${ty}`,fill:'none',stroke:dc,'stroke-width':isPrint?0.01:px*1.1,'stroke-dasharray':'0.06 0.05'},grp);
+        const leaf=(hx,sx,w)=>{const ey=hy+w*sy,tx=hx+w*sx;
+          el('line',{x1:hx,y1:hy,x2:hx,y2:ey,stroke:dc,'stroke-width':isPrint?0.015:px*1.8},grp);
+          el('path',{d:`M${hx},${ey} A${w},${w} 0 0 ${(sx*sy>0?0:1)} ${tx},${hy}`,fill:'none',stroke:dc,'stroke-width':isPrint?0.01:px*1.1,'stroke-dasharray':'0.06 0.05'},grp);};
+        if(o.leaves===2){leaf(-hw,1,o.ow/2);leaf(hw,-1,o.ow/2);} // kétszárnyú: a két szélén pántolva, középen záródik
+        else leaf(hx,sx,o.ow);
       }
       // felirat a fal külső oldalán, mindig olvasható irányban
       const lbl=o.sh>0?`${hu(o.ow)}+${hu(o.sh)}/${hu(o.oh)}`:`${hu(o.ow)}/${hu(o.oh)}`;
@@ -2326,6 +2335,7 @@ function openOpModal(o){
     ${pass?'':`<div class="row" ${o.type==='Ajtó'?'style="display:none"':''}><label>Redőnytok</label><label class="chk" style="width:auto;flex:none"><input id="mShOn" type="checkbox" ${o.sh>0?'checked':''}> van</label><input id="mSh" data-disto type="text" inputmode="none" autocomplete="off" value="${o.sh>0?o.sh:0.3}" style="flex:none;width:70px" ${o.sh>0?'':'disabled'}><span class="muted">m</span></div>
     <div class="row"><label>Parapet pm (m)</label><input id="mPm" data-disto type="text" inputmode="none" autocomplete="off" value="${o.pm||0}"></div>`}
     <div class="row"><label>Darabszám (db)</label><input id="mCnt" type="number" min="1" max="12" value="${o.cnt||1}" style="flex:none;width:70px"><label class="chk" style="width:auto;flex:none;margin-left:10px"><input id="mGang" type="checkbox" ${o.gang?'checked':''}> sorolva (egymás mellett)</label></div>
+    ${o.type==='Ajtó'||o.type==='Erkélyajtó'?`<div class="row"><label>Szárnyak</label><label class="chk" style="width:auto;flex:none"><input id="mLeaf2" type="checkbox" ${o.leaves===2?'checked':''}> kétszárnyú</label></div>`:''}
     <div class="row" style="justify-content:flex-end;margin-top:10px">
       ${(o.cnt||1)>1?'<button class="btn" id="mSplit">Szétbontás</button>':''}
       <button class="btn dan" id="mDel">Törlés</button>
@@ -2352,6 +2362,7 @@ function openOpModal(o){
     o.pm=pass?0:Math.max(0,num('#mPm')||0);
     o.cnt=Math.max(1,parseInt($('#mCnt').value)||1);
     o.gang=$('#mGang').checked||undefined;
+    o.leaves=$('#mLeaf2')&&$('#mLeaf2').checked?2:undefined;
     // save to recent/frequent list if new
     if(!S.freqOps.some(f=>f.type===o.type&&f.ow===o.ow&&f.oh===o.oh&&f.pm===o.pm&&f.sh===o.sh)){
       S.freqOps.unshift({type:o.type,alt:o.alt,ow:o.ow,oh:o.oh,sh:o.sh,pm:o.pm});
@@ -2455,6 +2466,7 @@ function panel(){
         `<div class="row"><label>${l}</label><textarea data-note="${k}" rows="1">${esc(b[k]||'')}</textarea></div>`).join('')}</div>
       <div class="sec"><h4>Export</h4>
       <div class="row"><label class="chk" style="width:auto;flex:1"><input id="bExpInt" type="checkbox" ${b.expInt!==false?'checked':''}> Belső falak és belső nyílászárók az exportban</label></div>
+      <div class="row"><label class="chk" style="width:auto;flex:1"><input id="bGbOp" type="checkbox" ${b.gbOpDetail?'checked':''}> gbXML: nyílászárók méret- és helyadatai külön is (parapet, távolság a fal sarkától)</label></div>
       <div class="row"><button class="btn pri" id="pXls">Excel WinWatt-hoz (.xlsx)</button><button class="btn" id="pGbx">gbXML (próba)</button><button class="btn" id="pPrn">A4 Nyomtatás</button><button class="btn" id="pPlan">Csak rajz</button></div></div>`;
     const bind=(id,k,num)=>{$(id).onchange=e=>{b[k]=num?pf(e.target.value)||0:e.target.value;save();updateTopInfo();};};
     bind('#bCust','cust');bind('#bAddr','addr');bind('#bHrsz','hrsz');bind('#bDate','date');
@@ -2466,7 +2478,7 @@ function panel(){
       b.bm=nv;save();render();
     };
     p.querySelectorAll('[data-note]').forEach(t=>t.onchange=()=>{b[t.dataset.note]=t.value;save();});
-    $('#pXls').onclick=exportXls;$('#pGbx').onclick=exportGbxml;$('#pPrn').onclick=printA4;if($('#bExpInt'))$('#bExpInt').onchange=e=>{S.b.expInt=e.target.checked;save();updExpIntLbl();};$('#pPlan').onclick=printPlan;
+    $('#pXls').onclick=exportXls;$('#pGbx').onclick=exportGbxml;$('#pPrn').onclick=printA4;if($('#bExpInt'))$('#bExpInt').onchange=e=>{S.b.expInt=e.target.checked;save();updExpIntLbl();};if($('#bGbOp'))$('#bGbOp').onchange=e=>{S.b.gbOpDetail=e.target.checked;save();};$('#pPlan').onclick=printPlan;
     return;
   }
   // Props tab
@@ -2709,6 +2721,25 @@ function levelZ(l){
   else{for(let k=base-1;k>=i;k--)z-=hOf(ls[k])+(+S.b.pm||0);}
   return Math.round(z*1000)/1000;
 }
+// WinWatt-kód: földszint 01, 02…; emelet 10, 11…; ha egy szinten 10+ helyiség van, 100-as blokkok; pince: P01…
+function gbCode(r){
+  const ls=S.levels.slice().sort((a,b)=>levelZ(a)-levelZ(b)),base=ls.findIndex(l=>levelZ(l)>-0.01);
+  const per=l=>S.rooms.filter(x=>lvlOf(x)===l.id),B=Math.max(...ls.map(l=>per(l).length))>=10?100:10;
+  const l=S.levels.find(x=>x.id===lvlOf(r)),k=ls.indexOf(l)-Math.max(0,base),i=per(l).indexOf(r)+1;
+  const w=B===100?3:2;
+  if(k<0)return 'P'+String(i).padStart(2,'0');
+  return k===0?String(i).padStart(2,'0'):String(k*B+i-1).padStart(w,'0');
+}
+// a WinWatt funkció-listájához illő, rövid kategória
+function gbFunc(r){
+  const n=(r.name||'').toLowerCase();
+  if(/előszoba|folyosó|közlekedő|szélfogó|lépcső|hall/.test(n))return 'közlekedő';
+  if(/háló/.test(n))return 'hálószoba';
+  if(/fürdő|zuhany|wc|mosdó/.test(n))return 'fürdő';
+  if(/konyha/.test(n))return 'konyha';
+  if(/kamra|kazán|tároló|spájz|mosókonyha|garázs|műhely|pince/.test(n))return 'kiszolgáló';
+  return 'lakószoba';
+}
 function exportGbxml(){
   if(!S.rooms.length){alert('Nincs helyiség a rajzon.');return;}
   const rel=detectRel(),f=v=>(Math.abs(v)<5e-7?0:v).toFixed(6),xe=s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -2732,11 +2763,23 @@ function exportGbxml(){
   S.rooms.forEach(r=>{sid.set(r.id,id('sp'));});
   const bnd=new Map();S.rooms.forEach(r=>bnd.set(r.id,[]));
   const surfaces=[];
+  const cp=p=>`<CartesianPoint><Coordinate>${f(p.X)}</Coordinate><Coordinate>${f(p.Y)}</Coordinate><Coordinate>${f(p.Z)}</Coordinate></CartesianPoint>`;
+  const rectGeo=(pts,az,tilt)=>{ // valós szélesség/magasság + bal alsó sarok (függőlegesnél vízszintes hossz × magasság)
+    const zs=pts.map(p=>p.Z),zmin=Math.min(...zs),zmax=Math.max(...zs);
+    if(tilt>45&&tilt<135){
+      const a=az*Math.PI/180,ux=-Math.cos(a),uy=Math.sin(a); // vízszintes irány a felületen
+      const ts=pts.map(p=>p.X*ux+p.Y*uy),tmin=Math.min(...ts),i0=ts.indexOf(tmin);
+      return {w:Math.max(...ts)-tmin,h:zmax-zmin,o:{X:pts[i0].X,Y:pts[i0].Y,Z:zmin}};
+    }
+    const xs=pts.map(p=>p.X),ys=pts.map(p=>p.Y);
+    const w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys),c=Math.cos(tilt*Math.PI/180)||1;
+    return {w,h:Math.abs(tilt-0)<1||Math.abs(tilt-180)<1?h:h/Math.abs(c),o:{X:Math.min(...xs),Y:Math.min(...ys),Z:zmin}};
+  };
   const addSurf=(type,conName,pts,adj,ops=[],extra='')=>{
-    const sId=id('su'),{az,tilt}=azTilt(pts);
-    const opXml=ops.map(o=>`<Opening id="${id('op')}" openingType="${o.kind}" windowTypeIdRef="${o.wt}"><Name>${xe(o.name)}</Name><PlanarGeometry>${pl(o.pts)}</PlanarGeometry></Opening>`).join('');
+    const sId=id('su'),{az,tilt}=azTilt(pts),rg=rectGeo(pts,az,tilt);
+    const opXml=ops.map(o=>`<Opening id="${id('op')}" openingType="${o.kind}" windowTypeIdRef="${o.wt}"><Name>${xe(o.name)}</Name>${S.b.gbOpDetail?`<RectangularGeometry><Width>${f(o.w)}</Width><Height>${f(o.h)}</Height><CartesianPoint><Coordinate>${f(o.off)}</Coordinate><Coordinate>${f(o.sill)}</Coordinate><Coordinate>0.000000</Coordinate></CartesianPoint></RectangularGeometry>`:''}<PlanarGeometry>${pl(o.pts)}</PlanarGeometry></Opening>`).join('');
     const exposed=/Exterior|Roof|Exposed/.test(type)?' exposedToSun="true"':'';
-    surfaces.push(`<Surface id="${sId}" surfaceType="${type}" constructionIdRef="${con(conName)}"${exposed}><Name>${xe(conName)}</Name><RectangularGeometry><Azimuth>${f(az)}</Azimuth><Tilt>${f(tilt)}</Tilt><Width>${f(Math.sqrt(areaOf(pts)))}</Width><Height>${f(Math.sqrt(areaOf(pts)))}</Height></RectangularGeometry><PlanarGeometry>${pl(pts)}</PlanarGeometry>${adj.map((a,i)=>`<AdjacentSpaceId spaceIdRef="${sid.get(a.r)}"${a.st?` surfaceType="${a.st}"`:''}/>`).join('')}${opXml}</Surface>`);
+    surfaces.push(`<Surface id="${sId}" surfaceType="${type}" constructionIdRef="${con(conName)}"${exposed}><Name>${xe(conName)}</Name><RectangularGeometry><Azimuth>${f(az)}</Azimuth><Tilt>${f(tilt)}</Tilt><Width>${f(rg.w)}</Width><Height>${f(rg.h)}</Height>${cp(rg.o)}</RectangularGeometry><PlanarGeometry>${pl(pts)}</PlanarGeometry>${adj.map((a,i)=>`<AdjacentSpaceId spaceIdRef="${sid.get(a.r)}"${a.st?` surfaceType="${a.st}"`:''}/>`).join('')}${opXml}</Surface>`);
     adj.forEach((a,i)=>{const o=adj[1-i];bnd.get(a.r).push(`<SpaceBoundary isSecondLevelBoundary="true" surfaceIdRef="${sId}"${o?` oppositeIdRef="${sid.get(o.r)}"`:''}><PlanarGeometry>${pl(pts)}</PlanarGeometry></SpaceBoundary>`);});
     return sId;
   };
@@ -2784,56 +2827,93 @@ function exportGbxml(){
       const opx=real.filter(x=>x.t*L>=a-1e-6&&x.t*L<=b+1e-6).map(x=>{
         const h=x.o.oh+(x.o.sh||0),zb=z0+(x.o.type==='Ablak'?(+x.o.pm||0):0);
         const q=[T(l,P(x.a/L),zb),T(l,P(x.b/L),zb),T(l,P(x.b/L),zb+h),T(l,P(x.a/L),zb+h)];
-        const door=x.o.type!=='Ablak',kind=door?(/erkély/i.test(x.o.alt||'')?'SlidingDoor':'NonSlidingDoor'):'OperableWindow';
-        return {pts:orient(q,want),kind,wt:wtype(x.o),name:`${x.o.type} ${x.o.alt||''} ${x.o.ow}×${h}`.trim()};
+        const door=x.o.type==='Ajtó'&&!/erkély/i.test(x.o.alt||''),kind=door?'NonSlidingDoor':'FixedWindow'; // erkélyajtó: üvegezett → az ablakok között
+        const pq=orient(q,want),{az:oaz}=azTilt(pq),rq=rectGeo(pq,oaz,90),srf=rectGeo(poly,oaz,90);
+        const a2=oaz*Math.PI/180,ux=-Math.cos(a2),uy=Math.sin(a2);
+        return {pts:pq,kind,wt:wtype(x.o),w:x.o.ow,h,sill:zb-z0,off:(rq.o.X-srf.o.X)*ux+(rq.o.Y-srf.o.Y)*uy,name:`${x.o.type} ${x.o.alt||''} ${x.o.ow}×${h}`.trim()};
       });
       const conName=wallTypeName(w);
       if(sg.r2)addSurf('InteriorWall',conName,poly,[{r:r.id},{r:sg.r2}],opx);
       else addSurf(lvlOf(r)===S.levels[0].id&&/pince/i.test(l.name)?'UndergroundWall':'ExteriorWall',conName,poly,[{r:r.id}],opx);
     });
   });
-  // ---- padlók, födémek, tetők
-  const below=(r)=>{ // az alatta lévő szint helyisége (a középpont alatt)
-    const l=lv(lvlOf(r)),z=levelZ(l),c=roomCenter(r),W={X:c.x-l.bx,Y:c.y-l.by};
-    const lower=S.levels.filter(x=>levelZ(x)<z-0.5).sort((a,b)=>levelZ(b)-levelZ(a))[0];if(!lower)return null;
-    return S.rooms.find(x=>lvlOf(x)===lower.id&&ptInRoom(W.X+lower.bx,W.Y+lower.by,x))||null;
+  // ---- padlók, födémek, tetők: a szintek közötti átfedést alaprajzi metszéssel számoljuk (bázispontokhoz igazítva)
+  const toB=(l,p)=>({x:p.x-l.bx,y:p.y-l.by}),fromB=(l,p)=>({x:p.x+l.bx,y:p.y+l.by});
+  const sArea=p=>{let a=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];a+=p[i].x*q.y-q.x*p[i].y;}return a/2;};
+  const ccw=p=>sArea(p)<0?p.slice().reverse():p;
+  const tri=poly=>{ // fülvágásos háromszögelés
+    let p=ccw(poly).slice(),out=[],guard=0;
+    const cr=(a,b,c)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+    const inT=(q,a,b,c)=>cr(a,b,q)>1e-12&&cr(b,c,q)>1e-12&&cr(c,a,q)>1e-12;
+    while(p.length>3&&guard++<500){
+      let cut=false;
+      for(let i=0;i<p.length;i++){const a=p[(i+p.length-1)%p.length],b=p[i],c=p[(i+1)%p.length];
+        if(cr(a,b,c)<=1e-12)continue;if(p.some(q=>q!==a&&q!==b&&q!==c&&inT(q,a,b,c)))continue;
+        out.push([a,b,c]);p.splice(i,1);cut=true;break;}
+      if(!cut)break;
+    }
+    if(p.length>=3)out.push(p);return out;
   };
-  const hasAbove=new Set();
-  S.rooms.forEach(r=>{const b=below(r);if(b)hasAbove.add(b.id);});
+  const clipHalf=(P,a,b,keepLeft)=>{ // a→b egyenes bal (belső) vagy jobb oldala
+    const side=q=>((b.x-a.x)*(q.y-a.y)-(b.y-a.y)*(q.x-a.x))*(keepLeft?1:-1)>=-1e-9,out=[];
+    for(let i=0;i<P.length;i++){const c=P[i],d=P[(i+1)%P.length],ic=side(c),id=side(d);if(ic)out.push(c);
+      if(ic!==id){const den=(b.x-a.x)*(d.y-c.y)-(b.y-a.y)*(d.x-c.x);if(Math.abs(den)>1e-12){const t=((b.x-a.x)*(a.y-c.y)-(b.y-a.y)*(a.x-c.x))/den;out.push({x:c.x+(d.x-c.x)*t,y:c.y+(d.y-c.y)*t});}}}
+    return out;
+  };
+  const clipConvex=(P,C)=>{let r=P;for(let i=0;i<C.length&&r.length;i++)r=clipHalf(r,C[i],C[(i+1)%C.length],true);return r;};
+  const big=p=>p.length>=3&&Math.abs(sArea(p))>0.02;
+  const inter=(A,B)=>tri(B).map(t=>clipConvex(ccw(A),ccw(t))).filter(big);
+  const diff=(A,Bs)=>{
+    let pieces=tri(A).map(t=>ccw(t));
+    Bs.forEach(B=>tri(B).forEach(t0=>{const C=ccw(t0);pieces=pieces.flatMap(P=>{const res=[];let rest=P;
+      for(let i=0;i<C.length&&rest.length>=3;i++){const o=clipHalf(rest,C[i],C[(i+1)%C.length],false);if(big(o))res.push(o);rest=clipHalf(rest,C[i],C[(i+1)%C.length],true);}
+      return res;});}));
+    return pieces.filter(big);
+  };
+  const levelRooms=l=>S.rooms.filter(r=>lvlOf(r)===l.id&&roomPoly(r).length>=3);
+  const nearLevel=(z,dir)=>S.levels.filter(x=>dir<0?levelZ(x)<z-0.5:levelZ(x)>z+0.5).sort((a,b)=>dir<0?levelZ(b)-levelZ(a):levelZ(a)-levelZ(b))[0]||null;
+  const DOWN={X:0,Y:0,Z:-1},UP={X:0,Y:0,Z:1};
+  const ceilPieces=(r,l,z0,pieces)=>{ // a födém alatti (fedetlen) részek: padlásfödém vagy tetőtérnél metszet szerinti tető
+    const sec=secOf(r);
+    pieces.forEach(pc=>{
+      if(sec){
+        const us=sec.P.pts.map(q=>q.u+sec.o);
+        for(let i=0;i<us.length-1;i++){
+          if(us[i+1]-us[i]<1e-3)continue;
+          const piece=clip(pc,sec.ax,us[i],us[i+1]);if(piece.length<3||polyAreaAbs(piece)<0.01)continue;
+          const flat=Math.abs(sec.P.pts[i].h-sec.P.pts[i+1].h)<1e-3;
+          addSurf(flat?'Ceiling':'Roof',flat?(r.slab?`Padlásfödém – ${r.slab}`:'Padlásfödém'):'Tető',orient(piece.map(p=>T(l,p,z0+hAt(sec.P,(sec.ax==='x'?p.x:p.y)-sec.o))),UP),[{r:r.id}]);
+        }
+      }else addSurf('Ceiling',r.slab?`Födém – ${r.slab}`:'Padlásfödém',orient(pc.map(p=>T(l,p,z0+rH(r))),UP),[{r:r.id}]);
+    });
+  };
   const clip=(poly,ax,lo,hi)=>{
-    const k=p=>ax==='x'?p.x:p.y,cut=(pts,keep,inter)=>{const out=[];for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length],ia=keep(a),ib=keep(b);if(ia)out.push(a);if(ia!==ib)out.push(inter(a,b));}return out;};
+    const k=p=>ax==='x'?p.x:p.y,cut=(pts,keep,inter2)=>{const out=[];for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length],ia=keep(a),ib=keep(b);if(ia)out.push(a);if(ia!==ib)out.push(inter2(a,b));}return out;};
     const at=(a,b,v)=>{const t=(v-k(a))/(k(b)-k(a));return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};};
     let p=cut(poly,q=>k(q)>=lo-1e-9,(a,b)=>at(a,b,lo));p=cut(p,q=>k(q)<=hi+1e-9,(a,b)=>at(a,b,hi));return p;
   };
-  const DOWN={X:0,Y:0,Z:-1},UP={X:0,Y:0,Z:1};
   S.rooms.forEach(r=>{
     const l=lv(lvlOf(r)),z0=levelZ(l),poly=roomPoly(r);if(poly.length<3)return;
-    const b=below(r);
-    const fl=orient(poly.map(p=>T(l,p,z0)),DOWN);
-    if(b)addSurf('InteriorFloor',b.slab?`Födém – ${b.slab}`:'Közbenső födém',fl,[{r:r.id,st:'InteriorFloor'},{r:b.id,st:'Ceiling'}]);
-    else addSurf(z0<-0.5||levelZ(S.levels[0])===z0||!S.levels.some(x=>levelZ(x)<z0-0.5)?'SlabOnGrade':'ExposedFloor',r.floor?`Padló – ${r.floor}`:'Padló',fl,[{r:r.id}]);
-    if(hasAbove.has(r.id))return; // a fölötte lévő helyiség padlója már leírta
-    const sec=secOf(r);
-    if(sec){
-      const us=sec.P.pts.map(q=>q.u+sec.o);
-      for(let i=0;i<us.length-1;i++){
-        if(us[i+1]-us[i]<1e-3)continue;
-        const piece=clip(poly,sec.ax,us[i],us[i+1]);if(piece.length<3||polyAreaAbs(piece)<0.01)continue;
-        const flat=Math.abs(sec.P.pts[i].h-sec.P.pts[i+1].h)<1e-3;
-        const pts=orient(piece.map(p=>T(l,p,z0+hAt(sec.P,(sec.ax==='x'?p.x:p.y)-sec.o))),UP);
-        addSurf(flat?'Ceiling':'Roof',flat?(r.slab?`Padlásfödém – ${r.slab}`:'Padlásfödém'):'Tető',pts,[{r:r.id}]);
-      }
-    }else{
-      addSurf('Ceiling',r.slab?`Födém – ${r.slab}`:'Padlásfödém',orient(poly.map(p=>T(l,p,z0+rH(r))),UP),[{r:r.id}]);
-    }
+    const pB=poly.map(p=>toB(l,p));
+    // padló: alatta lévő szint helyiségeivel közös rész = közbenső födém, a többi talajon fekvő / alulról szabad
+    const lo=nearLevel(z0,-1),lowRooms=lo?levelRooms(lo):[];
+    lowRooms.forEach(b=>{const bB=roomPoly(b).map(p=>toB(lo,p));inter(pB,bB).forEach(pc=>{
+      addSurf('InteriorFloor',b.slab?`Födém – ${b.slab}`:'Közbenső födém',orient(pc.map(p=>T(l,fromB(l,p),z0)),DOWN),[{r:r.id,st:'InteriorFloor'},{r:b.id,st:'Ceiling'}]);});});
+    const restF=lowRooms.length?diff(pB,lowRooms.map(b=>roomPoly(b).map(p=>toB(lo,p)))):[pB];
+    const grade=!lo||z0<=0.01;
+    restF.forEach(pc=>addSurf(grade?'SlabOnGrade':'ExposedFloor',r.floor?`Padló – ${r.floor}`:'Padló',orient(pc.map(p=>T(l,fromB(l,p),z0)),DOWN),[{r:r.id}]));
+    // mennyezet: a fölötte lévő szint helyiségei alatti részt azok padlója már leírta
+    const hi=nearLevel(z0,1),upRooms=hi?levelRooms(hi):[];
+    const restC=upRooms.length?diff(pB,upRooms.map(u=>roomPoly(u).map(p=>toB(hi,p)))):[pB];
+    ceilPieces(r,l,z0,restC.map(pc=>pc.map(p=>fromB(l,p))));
   });
   // ---- terek, zónák
   const zones=[];
   S.rooms.forEach(r=>{
     const l=lv(lvlOf(r)),z0=levelZ(l),sc=roomSecCalc(r),a=sc?sc.area19:roomArea(r),vol=sc?sc.vol:roomArea(r)*rH(r);
-    const nm=`${roomNo(r)}. ${r.name||'Helyiség'}`,zid='zn'+sid.get(r.id).slice(2),t=/fürdő|zuhany/i.test(r.name||'')?24:/kamra|kazán|garázs|tároló/i.test(r.name||'')?16:20;
+    const nm=`${gbCode(r)} ${r.name||'Helyiség'}`,fn=gbFunc(r),zid='zn'+sid.get(r.id).slice(2),t=/fürdő|zuhany/i.test(r.name||'')?24:/kamra|kazán|garázs|tároló/i.test(r.name||'')?16:20;
     zones.push(`<Zone id="${zid}"><Name>${xe(nm)}</Name><DesignHeatT unit="C">${t.toFixed(1)}</DesignHeatT><DesignCoolT unit="C">26.0</DesignCoolT></Zone>`);
-    spaces.push(`<Space id="${sid.get(r.id)}" buildingStoreyIdRef="st_${l.id}" zoneIdRef="${zid}" conditionType="HeatedAndCooled"><Name>${xe(nm)}</Name><Description>${xe(nm)}</Description><Area>${a.toFixed(2)}</Area><Volume>${vol.toFixed(2)}</Volume><PlanarGeometry>${pl(orient(roomPoly(r).map(p=>T(l,p,z0)),UP))}</PlanarGeometry>${bnd.get(r.id).join('')}</Space>`);
+    spaces.push(`<Space id="${sid.get(r.id)}" buildingStoreyIdRef="st_${l.id}" zoneIdRef="${zid}" conditionType="HeatedAndCooled"><Name>${xe(fn)}</Name><Description>${xe(nm)}</Description><Area>${a.toFixed(2)}</Area><Volume>${vol.toFixed(2)}</Volume><PlanarGeometry>${pl(orient(roomPoly(r).map(p=>T(l,p,z0)),UP))}</PlanarGeometry>${bnd.get(r.id).join('')}</Space>`);
   });
   const storeys=S.levels.map(l=>`<BuildingStorey id="st_${l.id}"><Name>${xe(l.name)}</Name><Level>${f(levelZ(l))}</Level></BuildingStorey>`).join('');
   const totA=S.rooms.reduce((s,r)=>{const sc=roomSecCalc(r);return s+(sc?sc.area19:roomArea(r));},0);
