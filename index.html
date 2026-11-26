@@ -58,6 +58,10 @@ button{cursor:pointer}
 #plan{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
 #numBanner{display:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;background:#7c2d12f0;border:1px solid #fb923c;border-radius:8px;padding:6px 10px;gap:8px;align-items:center;font-size:13px;color:#fff}
 #numBanner.on{display:flex}
+#inkBanner{display:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;background:#1e3a8af0;border:1px solid #60a5fa;border-radius:8px;padding:6px 10px;gap:8px;align-items:center;font-size:13px;color:#fff}
+#inkBanner.on{display:flex}
+#inkBanner button{background:#374151;color:#fff;border:1px solid #6b7280;border-radius:6px;padding:4px 10px;min-width:34px}
+#inkBanner button.sel{outline:3px solid #fff}
 #numBanner button{background:#374151;color:#fff;border:1px solid #6b7280;border-radius:6px;padding:4px 10px}
 #segBox{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:5;display:flex;gap:5px;align-items:center;flex-wrap:wrap;background:#111827ee;border:1px solid #3b82f6;border-radius:8px;padding:6px 8px;font-size:12px;max-width:calc(100% - 20px)}
 #segBox input{width:80px}
@@ -170,6 +174,7 @@ textarea{resize:vertical}
         <button data-act="loadJson">Betöltés (.json)</button>
         <hr>
         <button data-act="exportXls">Excel export WinWatt-hoz (.xlsx)</button>
+        <button data-act="exportGbxml">gbXML export WinWatt-hoz (próba)</button>
         <button data-act="toggleExpInt" id="mnExpInt">Belső szerkezetek exportja: be</button>
         <button data-act="printA4">Felmérési lap nyomtatás (A4)</button>
         <button data-act="printPlan">Csak rajz nyomtatás / PDF (A4, fejléccel)</button>
@@ -201,6 +206,7 @@ textarea{resize:vertical}
         <button data-act="toggleGrid">Rács be/ki</button>
         <button data-act="toggleDim">Kotta be/ki</button>
         <button data-act="toggleOverall">Teljes külső méret be/ki</button>
+        <button data-act="toggleNotes" id="mnNotes">Kézi jegyzetek: látszanak</button>
       </span>
     </span>
     <span class="mi" data-menu>Beállítások
@@ -238,6 +244,8 @@ textarea{resize:vertical}
       <button class="tb chip" data-pal="Ablak">Ablak</button>
       <button class="tb chip" data-pal="Ajtó">Ajtó</button>
       <button class="tb chip" data-pal="Átjáró" title="Szárny nélküli nyílás két helyiség között">Átjáró</button>
+      <button class="tb" data-tool="chim" title="Kémény / kürtő: koppints a helyére a rajzon">Kémény</button>
+      <button class="tb" data-tool="ink" title="Kézi jegyzet tollal / ujjal a rajzra">✎ Jegyzet</button>
       <button class="tb" id="btnNum" title="Helyiségek újraszámozása: koppints rájuk a kívánt sorrendben">№ Számozás</button>
       <span class="pop-wrap">
         <button id="btnFreqOp" class="tb" title="Gyakori / előző nyílászárók">☰</button>
@@ -285,6 +293,7 @@ textarea{resize:vertical}
         <button id="paintAll">Összes helyiség</button>
         <button id="paintStop">Kész</button>
       </div>
+      <div id="inkBanner"><span>✎ Jegyzet</span><button data-ink="#ef4444" style="background:#ef4444">&nbsp;</button><button data-ink="#3b82f6" style="background:#3b82f6">&nbsp;</button><button data-ink="#22c55e" style="background:#22c55e">&nbsp;</button><button data-ink="#111827" style="background:#e5e7eb;color:#111">&nbsp;</button><button id="inkErase">Radír</button><button id="inkUndo">↶</button><button id="inkDone">Kész</button></div>
       <div id="numBanner"><span id="numTxt"></span><button id="numUndo">↶</button><button id="numStop">Kész</button></div>
       <div id="segBox" style="display:none">
         <span id="segTxt">Szakasz</span>
@@ -366,7 +375,7 @@ const DEFAULT_OPS=[
 const PIDX='ef_projects',PCUR='ef_cur';let curPid=null; // több felmérés tárolása
 let S=loadState();
 let tool='select',tab='props';
-let selWalls=new Set(),selRoom=null,selOp=null;
+let selWalls=new Set(),selRoom=null,selOp=null,selChim=null;
 let undoStack=[],redoStack=[];
 let draft=[],guides=[],cadPt=null;
 let paintMode=null,showOverall=false,hoverPt=null,spaceDown=false,printWide=false; // {kind:'floor'|'slab', val:'...'}
@@ -391,6 +400,8 @@ function normalize(p){
   p.b=Object.assign(d.b,p.b||{});
   if(!p.b.defTh)p.b.defTh=0.30;
   p.rooms=(p.rooms||[]).map(r=>({...r,sys:Object.assign({heat:'',dhw:'',light:'',ren:''},r.sys||{})}));
+  p.chims=Array.isArray(p.chims)?p.chims:[];
+  p.notes=Array.isArray(p.notes)?p.notes:[];
   p.walls=p.walls||[];p.openings=p.openings||[];
   if(!p.freqOps)p.freqOps=d.freqOps;
   p.pins=p.pins||[];
@@ -967,16 +978,71 @@ function ghostLines(){
   const rel=detectRel();
   return ws.filter(w=>!rel.partOf.has(w)&&!w.fstep).map(w=>offPts(w,x=>thOf(x)+(x.eps||0)).map(p=>({x:p.x+dx,y:p.y+dy})));
 }
+/* Kémények, kürtők */
+const CHIM_TYPES=['Kémény (használt)','Kémény (nem használt)','Gyűjtőkémény','Szellőzőkürtő'];
+const CHIM_ABBR={'Kémény (használt)':'K','Kémény (nem használt)':'K n.h.','Gyűjtőkémény':'GyK','Szellőzőkürtő':'Sz'};
+const CHIM_SIZES=[[0.38,0.38],[0.25,0.25],[0.51,0.38],[0.14,0.14],[0.2,0.2]];
+function chimRoom(c){
+  let r=(S.rooms||[]).find(x=>lvlOf(x)===c.level&&ptInRoom(c.x,c.y,x));if(r)return r;
+  // falban álló kéményhez: a legközelebbi helyiség (minden irányba próbálunk)
+  for(const d of [0.3,0.5,0.8])for(const [dx,dy] of [[d,0],[-d,0],[0,d],[0,-d]]){r=S.rooms.find(x=>lvlOf(x)===c.level&&ptInRoom(c.x+dx,c.y+dy,x));if(r)return r;}
+  return null;
+}
+function chimHit(x,y,tol){return [...(S.chims||[])].reverse().find(c=>c.level===S.curLevel&&Math.abs(x-c.x)<=c.w/2+tol&&Math.abs(y-c.y)<=c.h/2+tol);}
+function openChimModal(c,isNew){
+  const m=$('#modal');
+  m.innerHTML=`<h3><span>Kémény / kürtő</span><button class="btn" id="mClose">✕</button></h3>
+    <div class="row"><label>Típus</label><select id="cType">${CHIM_TYPES.map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="row"><label>Méret</label><span style="display:flex;gap:6px;flex-wrap:wrap">${CHIM_SIZES.map(([w,h])=>`<button class="btn" data-sz="${w}x${h}">${Math.round(w*100)}×${Math.round(h*100)}</button>`).join('')}</span></div>
+    <div class="row"><label>Szélesség (m)</label><input id="cW" data-disto type="text" inputmode="none" autocomplete="off" value="${c.w}"></div>
+    <div class="row"><label>Mélység (m)</label><input id="cH" data-disto type="text" inputmode="none" autocomplete="off" value="${c.h}"></div>
+    <p class="muted">A kémény a helyiség alapterületébe beszámít (nem vonjuk le). Mozgatás: kijelölés után húzd.</p>
+    <div class="row"><button class="btn pri" id="mOk">OK</button>${isNew?'':'<button class="btn dan" id="cDel">Törlés</button>'}</div>`;
+  $('#modalWrap').classList.add('open');
+  const close=()=>$('#modalWrap').classList.remove('open');
+  m.querySelectorAll('[data-sz]').forEach(b=>b.onclick=()=>{const [w,h]=b.dataset.sz.split('x');$('#cW').value=w;$('#cH').value=h;});
+  $('#mClose').onclick=()=>{if(isNew){S.chims=S.chims.filter(x=>x!==c);}close();render();panel();};
+  $('#mOk').onclick=()=>{c.type=$('#cType').value;S.b.lastChim=c.type;c.w=Math.max(0.05,pf($('#cW').value)||0.38);c.h=Math.max(0.05,pf($('#cH').value)||0.38);save();close();render();panel();};
+  if($('#cDel'))$('#cDel').onclick=()=>{snapshot();S.chims=S.chims.filter(x=>x!==c);selChim=null;save();close();render();panel();};
+}
+function drawChims(target,isPrint,px){
+  const g=el('g',{},target);
+  (S.chims||[]).forEach(c=>{
+    const x0=c.x-c.w/2,y0=c.y-c.h/2,sel=!isPrint&&c.id===selChim;
+    const st=isPrint?'#000':(sel?'#f59e0b':'#e7e5e4'),sw=px*(isPrint?1.1:1.6);
+    el('rect',{x:x0,y:y0,width:c.w,height:c.h,fill:isPrint?'#d6d3d1':'#57534e',stroke:st,'stroke-width':sw},g);
+    if(c.type==='Szellőzőkürtő'){
+      el('circle',{cx:c.x,cy:c.y,r:Math.min(c.w,c.h)*0.32,fill:'none',stroke:st,'stroke-width':sw},g);
+    }else{
+      const da=c.type==='Kémény (nem használt)'?{'stroke-dasharray':`${px*4} ${px*3}`}:{};
+      el('line',{x1:x0,y1:y0,x2:x0+c.w,y2:y0+c.h,stroke:st,'stroke-width':sw,...da},g);
+      el('line',{x1:x0+c.w,y1:y0,x2:x0,y2:y0+c.h,stroke:st,'stroke-width':sw,...da},g);
+      if(c.type==='Gyűjtőkémény')el('rect',{x:x0+c.w*0.2,y:y0+c.h*0.2,width:c.w*0.6,height:c.h*0.6,fill:'none',stroke:st,'stroke-width':sw*0.8},g);
+    }
+    const t=el('text',{x:x0+c.w+px*3,y:y0+px*9,'font-size':px*(isPrint?8:10),fill:isPrint?'#000':'#fbbf24','font-weight':'600'},g);t.textContent=CHIM_ABBR[c.type]||'K';
+  });
+}
+/* Kézi jegyzetek (Apple Pencil / ujj) */
+let inkColor='#ef4444',inkErase=false,inkPenSeen=false;
+function updInkBanner(){$$('#inkBanner [data-ink]').forEach(b=>b.classList.toggle('sel',!inkErase&&b.dataset.ink===inkColor));$('#inkErase').classList.toggle('sel',inkErase);}
+function inkEraseAt(p,tol){const before=S.notes.length;S.notes=S.notes.filter(n=>n.level!==S.curLevel||!n.pts.some((q,i)=>i>0&&ptSegDist(p.x,p.y,n.pts[i-1][0],n.pts[i-1][1],q[0],q[1]).d<tol));return S.notes.length!==before;}
+function drawNotes(target,isPrint,px){
+  if(S.b.hideNotes||!(S.notes||[]).length)return;
+  const g=el('g',{},target);
+  S.notes.forEach(n=>{if(n.pts.length<2)return;
+    el('path',{d:'M'+n.pts.map(q=>q[0]+' '+q[1]).join(' L'),fill:'none',stroke:isPrint&&n.c==='#111827'?'#000':n.c,'stroke-width':isPrint?0.035:px*2.6,'stroke-linecap':'round','stroke-linejoin':'round',opacity:0.95},g);});
+}
 function levelState(lid){
   const rooms=S.rooms.filter(r=>lvlOf(r)===lid),ids=new Set(rooms.map(r=>r.id));
   const walls=S.walls.filter(w=>ids.has(w.roomId)),wids=new Set(walls.map(w=>w.id));
-  return {...S,rooms,walls,openings:S.openings.filter(o=>wids.has(o.wallId)),pins:(S.pins||[]).filter(p=>wids.has(p.a)&&wids.has(p.b))};
+  return {...S,rooms,walls,openings:S.openings.filter(o=>wids.has(o.wallId)),pins:(S.pins||[]).filter(p=>wids.has(p.a)&&wids.has(p.b)),chims:(S.chims||[]).filter(c=>c.level===lid),notes:(S.notes||[]).filter(n=>n.level===lid)};
 }
 function withLevel(lid,fn){S_FULL=S;S=levelState(lid);try{return fn();}finally{S=S_FULL;S_FULL=null;}}
 function setLevel(id){if(S.curLevel===id)return;S.curLevel=id;draft=[];guides=[];updateLevelBtn();save();}
 function updateLevelBtn(){const b=$('#btnLevel');if(b)b.textContent=`Szint: ${curLvl().name} ▾`;}
 function setTool(t){
   tool=t;draft=[];guides=[];hoverPt=null;cadPt=null;
+  const ib=$('#inkBanner');if(ib)ib.classList.toggle('on',t==='ink');if(t==='ink'){inkErase=false;updInkBanner();if(S.b.hideNotes){S.b.hideNotes=false;}}
   $$('[data-tool]').forEach(x=>x.classList.toggle('active',x.dataset.tool===tool));
   svg.style.cursor=tool==='select'?'default':tool==='pan'?'grab':'crosshair';render();
 }
@@ -1010,11 +1076,12 @@ function openLevelsModal(){
   const rows=S.levels.map(l=>`<tr data-lid="${l.id}">
       <td><input type="radio" name="curL" ${l.id===S.curLevel?'checked':''}></td>
       <td><input data-k="name" value="${esc(l.name)}" style="width:110px"></td>
+      <td><input data-k="z" data-disto type="text" inputmode="none" autocomplete="off" value="${l.z!=null&&l.z!==''?l.z:''}" placeholder="${hu(levelZ(l))}" style="width:60px" title="Padlószint (m) – üresen: automatikus (belmagasság + padlómagasság alapján)"></td>
       <td><select data-k="ref"><option value="">(előző szint)</option><option value="none" ${l.ref==='none'?'selected':''}>nincs</option>${S.levels.filter(x=>x.id!==l.id).map(x=>`<option value="${x.id}" ${l.ref===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td>
       <td class="muted">${S.rooms.filter(r=>lvlOf(r)===l.id).length} hely.</td>
       <td><button class="btn" data-a="base">Bázispont</button> <button class="btn" data-a="sec">Metszet${l.section?' ✓':''}</button> <button class="btn" data-a="go">Ugrás</button> ${S.levels.length>1?'<button class="btn dan" data-a="del">✕</button>':''}</td></tr>`).join('');
   m.innerHTML=`<h3><span>Szintek</span><button class="btn" id="mClose">✕</button></h3>
-    <table style="width:100%"><tr><th></th><th>Név</th><th>Segédkontúr</th><th></th><th></th></tr>${rows}</table>
+    <table style="width:100%"><tr><th></th><th>Név</th><th>Padlószint</th><th>Segédkontúr</th><th></th><th></th></tr>${rows}</table>
     <div class="row" style="margin-top:10px"><label>Új szint</label><select id="lvNew">${LEVEL_PRESETS.map(n=>`<option>${n}</option>`).join('')}<option value="">Egyéb…</option></select><button class="btn pri" id="lvAdd">+ Hozzáadás</button></div>
     <div class="row"><button class="btn" id="lvArr">Szintek egy sorba rendezése</button></div>
     <p class="muted">A szintek a vásznon egymás mellett vannak. A bázispont (pl. egy közös sarok vagy lépcső) köti össze őket: a segédkontúrként választott szint külső kontúrja ehhez igazítva, szaggatott vonallal és fogópontokkal jelenik meg az aktuális szinten.</p>`;
@@ -1026,6 +1093,7 @@ function openLevelsModal(){
     tr.querySelector('input[type=radio]').onchange=()=>{setLevel(l.id);render();};
     tr.querySelector('[data-k=name]').onchange=e=>{l.name=e.target.value.trim()||l.name;updateLevelBtn();save();};
     tr.querySelector('[data-k=ref]').onchange=e=>{l.ref=e.target.value||null;save();};
+    tr.querySelector('[data-k=z]').onchange=e=>{const v=String(e.target.value).trim();l.z=v===''?null:pf(v);save();};
     tr.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{
       const a=b.dataset.a;
       if(a==='base'){setLevel(l.id);close();fitLevel();setTool('base');showHint('Koppints a bázispontra (pl. közös sarok, lépcső, kémény) – a fogópontok működnek.');}
@@ -1685,6 +1753,8 @@ function render(targetSvg=svg,isPrint=false){
     }
   });
 
+  drawChims(targetSvg,isPrint,px);
+  drawNotes(targetSvg,isPrint,px);
   // Openings
   const gO=el('g',{},targetSvg);
   S.openings.forEach(o=>{
@@ -1917,6 +1987,7 @@ svg.addEventListener('pointerdown',e=>{
     if(e.isPrimary){activePtrs.clear();pinch=null;}
     activePtrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(activePtrs.size===2){
+      if(drag&&drag.kind==='ink'&&drag.n)S.notes=S.notes.filter(n=>n!==drag.n);
       drag=null;draft=[];guides=[];
       const [a,b]=[...activePtrs.values()];
       pinch={d:Math.hypot(b.x-a.x,b.y-a.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,view:{...view}};
@@ -1945,6 +2016,18 @@ svg.addEventListener('pointerdown',e=>{
     return;
   }
 
+  if(tool==='ink'){
+    if(e.pointerType==='pen')inkPenSeen=true;
+    if(e.pointerType==='touch'&&inkPenSeen){svg.style.cursor='grabbing';drag={kind:'pan',sx:e.clientX,sy:e.clientY,view:{...view}};return;} // tollal rajzolva az ujj mozgat (tenyér)
+    const px=view.w/(svg.getBoundingClientRect().width||800);
+    if(inkErase){snapshot();if(inkEraseAt(raw,px*14))save();drag={kind:'inkErase'};render();return;}
+    snapshot();const n={id:uid(),level:S.curLevel,c:inkColor,pts:[[r3(raw.x),r3(raw.y)]]};S.notes.push(n);drag={kind:'ink',n,px};return;
+  }
+  if(tool==='chim'){
+    const p=snapPt(raw);snapshot();
+    const c={id:uid(),level:S.curLevel,x:r3(p.x),y:r3(p.y),w:0.38,h:0.38,type:(S.b.lastChim||'Kémény (használt)')};
+    S.chims.push(c);selChim=c.id;selOp=null;selWalls.clear();setTool('select');save();render();openChimModal(c,true);return;
+  }
   if(tool==='base'){
     const p=snapPt(raw),c=curLvl();snapshot();c.bx=r3(p.x);c.by=r3(p.y);save();setTool('select');showHint('Bázispont beállítva: '+c.name);return;
   }
@@ -1982,6 +2065,9 @@ svg.addEventListener('pointerdown',e=>{
       drag={kind:'vtx',pts:findMatchingPts(w.x2,w.y2),moved:false};return;
     }
   }
+  // 1/b. Kémény
+  selChim=null;
+  {const c=chimHit(raw.x,raw.y,tol*0.4);if(c){selChim=c.id;selOp=null;selWalls.clear();drag={kind:'chim',c,sx:e.clientX,sy:e.clientY,ox:raw.x-c.x,oy:raw.y-c.y,moved:false};render();panel();return;}}
   // 2. Check opening tap (rotate door 90 deg / select opening)
   for(const o of S.openings){
     const w=S.walls.find(x=>x.id===o.wallId);if(!w)continue;
@@ -2089,6 +2175,19 @@ window.addEventListener('pointermove',e=>{
     w.sag=r2((raw.x-mx)*nx+(raw.y-my)*ny);
     render();return;
   }
+  if(drag.kind==='ink'){
+    const q=drag.n.pts[drag.n.pts.length-1];
+    if(Math.hypot(raw.x-q[0],raw.y-q[1])>drag.px*1.5){drag.n.pts.push([r3(raw.x),r3(raw.y)]);render();}
+    return;
+  }
+  if(drag.kind==='inkErase'){const px=view.w/(svg.getBoundingClientRect().width||800);if(inkEraseAt(raw,px*14))render();return;}
+  if(drag.kind==='chim'){
+    if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6){
+      if(!drag.moved){snapshot();drag.moved=true;}
+      drag.c.x=r2(raw.x-drag.ox);drag.c.y=r2(raw.y-drag.oy);render();
+    }
+    return;
+  }
   if(drag.kind==='op'){
     if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6){
       if(!drag.moved){snapshot();drag.moved=true;}
@@ -2121,6 +2220,12 @@ window.addEventListener('pointerup',e=>{
   if(drag.kind==='rect'){
     addRectRoom(draft[0],draft[1]);
     draft=[];guides=[];
+  }else if(drag.kind==='ink'){
+    if(drag.n.pts.length<2){const q=drag.n.pts[0];drag.n.pts.push([q[0]+0.01,q[1]+0.01]);} // pont
+    save();render();
+  }else if(drag.kind==='inkErase'){save();
+  }else if(drag.kind==='chim'){
+    if(drag.moved)save();
   }else if(drag.kind==='op'&&!drag.moved){
     // Tap on door -> rotate 90 deg clockwise!
     if(drag.o.type!=='Ablak'){
@@ -2350,7 +2455,7 @@ function panel(){
         `<div class="row"><label>${l}</label><textarea data-note="${k}" rows="1">${esc(b[k]||'')}</textarea></div>`).join('')}</div>
       <div class="sec"><h4>Export</h4>
       <div class="row"><label class="chk" style="width:auto;flex:1"><input id="bExpInt" type="checkbox" ${b.expInt!==false?'checked':''}> Belső falak és belső nyílászárók az exportban</label></div>
-      <div class="row"><button class="btn pri" id="pXls">Excel WinWatt-hoz (.xlsx)</button><button class="btn" id="pPrn">A4 Nyomtatás</button><button class="btn" id="pPlan">Csak rajz</button></div></div>`;
+      <div class="row"><button class="btn pri" id="pXls">Excel WinWatt-hoz (.xlsx)</button><button class="btn" id="pGbx">gbXML (próba)</button><button class="btn" id="pPrn">A4 Nyomtatás</button><button class="btn" id="pPlan">Csak rajz</button></div></div>`;
     const bind=(id,k,num)=>{$(id).onchange=e=>{b[k]=num?pf(e.target.value)||0:e.target.value;save();updateTopInfo();};};
     bind('#bCust','cust');bind('#bAddr','addr');bind('#bHrsz','hrsz');bind('#bDate','date');
     bind('#bOri','orient',1);bind('#bPm','pm',1);bind('#bTh','defTh',1);
@@ -2361,7 +2466,7 @@ function panel(){
       b.bm=nv;save();render();
     };
     p.querySelectorAll('[data-note]').forEach(t=>t.onchange=()=>{b[t.dataset.note]=t.value;save();});
-    $('#pXls').onclick=exportXls;$('#pPrn').onclick=printA4;if($('#bExpInt'))$('#bExpInt').onchange=e=>{S.b.expInt=e.target.checked;save();updExpIntLbl();};$('#pPlan').onclick=printPlan;
+    $('#pXls').onclick=exportXls;$('#pGbx').onclick=exportGbxml;$('#pPrn').onclick=printA4;if($('#bExpInt'))$('#bExpInt').onchange=e=>{S.b.expInt=e.target.checked;save();updExpIntLbl();};$('#pPlan').onclick=printPlan;
     return;
   }
   // Props tab
@@ -2369,6 +2474,17 @@ function panel(){
   const ws=[...selWalls].map(id=>S.walls.find(w=>w.id===id)).filter(Boolean);
   const op=S.openings.find(o=>o.id===selOp);
   let html='';
+  const ch=(S.chims||[]).find(c=>c.id===selChim);
+  if(ch){
+    const cr=chimRoom(ch);
+    html+=`<div class="sec"><h4>Kijelölt kémény / kürtő</h4>
+      <p>${esc(ch.type)} — <b>${Math.round(ch.w*100)}×${Math.round(ch.h*100)} cm</b>${cr?`, helyiség: ${roomNo(cr)}. ${esc(cr.name)}`:''}</p>
+      <div class="row"><button class="btn pri" id="chEdit">Módosítás</button><button class="btn dan" id="chDel">Törlés</button></div></div>`;
+    p.innerHTML=html;
+    $('#chEdit').onclick=()=>{snapshot();openChimModal(ch,false);};
+    $('#chDel').onclick=()=>{snapshot();S.chims=S.chims.filter(x=>x!==ch);selChim=null;save();render();panel();};
+    return;
+  }
   if(op){
     html+=`<div class="sec"><h4>Kijelölt nyílászáró</h4>
       <p>${esc(op.type)} (${esc(op.alt)}) — <b>${op.ow}${op.sh?'+'+op.sh:''} × ${op.oh} m</b>, pm: ${op.pm} m, ${op.cnt||1} db</p>
@@ -2581,6 +2697,166 @@ const EGTAJ=['É','ÉK','K','DK','D','DNy','Ny','ÉNy'];
 function egtaj(az){return EGTAJ[Math.round(((az%360)+360)%360/45)%8];}
 /* WinWatt-export. Sorrend: külső falak égtájanként (É, ÉK, K … ÉNy), utána a belső falak;
    a nyílászárók ugyanebben a sorrendben (a falukhoz igazítva). A falfelület a nyílászárókkal csökkentett (nettó) felület. */
+/* ===== gbXML export (WinWatt gbXML-modul) =====
+   Belméretes modell (SurfaceReferenceLocation="InteriorSurface"): a falak a belső síkon, a szintek a bázispontjukhoz igazítva.
+   Koordináták: X kelet, Y észak, Z fel; a rajz tájolását (S.b.orient) beleszámoljuk. */
+function levelZ(l){
+  if(l.z!==undefined&&l.z!==null&&l.z!==''&&isFinite(+l.z))return +l.z;
+  const hOf=L=>{const rs=S.rooms.filter(r=>lvlOf(r)===L.id);return rs.length?Math.max(...rs.map(r=>rH(r))):S.b.bm;};
+  const ls=S.levels,base=Math.max(0,ls.findIndex(x=>/földszint/i.test(x.name)));
+  const i=ls.indexOf(l);let z=0;
+  if(i>=base){for(let k=base;k<i;k++)z+=hOf(ls[k])+(+S.b.pm||0);}
+  else{for(let k=base-1;k>=i;k--)z-=hOf(ls[k])+(+S.b.pm||0);}
+  return Math.round(z*1000)/1000;
+}
+function exportGbxml(){
+  if(!S.rooms.length){alert('Nincs helyiség a rajzon.');return;}
+  const rel=detectRel(),f=v=>(Math.abs(v)<5e-7?0:v).toFixed(6),xe=s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  const th=(+S.b.orient||0)*Math.PI/180,cs=Math.cos(th),sn=Math.sin(th);
+  const lv=id=>S.levels.find(l=>l.id===id)||S.levels[0];
+  // rajz (x,y) → épület (X,Y,Z)
+  const T=(l,p,z)=>{const X=p.x-l.bx,Y=-(p.y-l.by);return {X:X*cs+Y*sn,Y:-X*sn+Y*cs,Z:z};};
+  const id=(()=>{let n=0;return p=>p+String(++n).padStart(4,'0');})();
+  const pl=pts=>`<PolyLoop>${pts.map(p=>`<CartesianPoint><Coordinate>${f(p.X)}</Coordinate><Coordinate>${f(p.Y)}</Coordinate><Coordinate>${f(p.Z)}</Coordinate></CartesianPoint>`).join('')}</PolyLoop>`;
+  const cross=(a,b)=>({X:a.Y*b.Z-a.Z*b.Y,Y:a.Z*b.X-a.X*b.Z,Z:a.X*b.Y-a.Y*b.X});
+  const normal=pts=>{let n={X:0,Y:0,Z:0};for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length];n.X+=(a.Y-b.Y)*(a.Z+b.Z);n.Y+=(a.Z-b.Z)*(a.X+b.X);n.Z+=(a.X-b.X)*(a.Y+b.Y);}return n;};
+  const orient=(pts,want)=>{const n=normal(pts);return n.X*want.X+n.Y*want.Y+n.Z*want.Z<0?pts.slice().reverse():pts;};
+  const azTilt=pts=>{const n=normal(pts),L=Math.hypot(n.X,n.Y,n.Z)||1;const tilt=Math.acos(Math.max(-1,Math.min(1,n.Z/L)))*180/Math.PI;let az=Math.atan2(n.X,n.Y)*180/Math.PI;if(az<0)az+=360;if(Math.hypot(n.X,n.Y)<1e-6)az=0;return {az,tilt};};
+  const areaOf=pts=>{const n=normal(pts);return Math.hypot(n.X,n.Y,n.Z)/2;};
+  // szerkezetek, ablaktípusok
+  const cons=new Map(),wts=new Map();
+  const con=name=>{name=name||'Szerkezet';if(!cons.has(name))cons.set(name,id('cn'));return cons.get(name);};
+  const wtype=o=>{const k=`${o.type} – ${o.alt||'általános'}`;if(!wts.has(k))wts.set(k,{id:id('wt'),o});return wts.get(k).id;};
+  // helyiségek
+  const sid=new Map(),spaces=[];
+  S.rooms.forEach(r=>{sid.set(r.id,id('sp'));});
+  const bnd=new Map();S.rooms.forEach(r=>bnd.set(r.id,[]));
+  const surfaces=[];
+  const addSurf=(type,conName,pts,adj,ops=[],extra='')=>{
+    const sId=id('su'),{az,tilt}=azTilt(pts);
+    const opXml=ops.map(o=>`<Opening id="${id('op')}" openingType="${o.kind}" windowTypeIdRef="${o.wt}"><Name>${xe(o.name)}</Name><PlanarGeometry>${pl(o.pts)}</PlanarGeometry></Opening>`).join('');
+    const exposed=/Exterior|Roof|Exposed/.test(type)?' exposedToSun="true"':'';
+    surfaces.push(`<Surface id="${sId}" surfaceType="${type}" constructionIdRef="${con(conName)}"${exposed}><Name>${xe(conName)}</Name><RectangularGeometry><Azimuth>${f(az)}</Azimuth><Tilt>${f(tilt)}</Tilt><Width>${f(Math.sqrt(areaOf(pts)))}</Width><Height>${f(Math.sqrt(areaOf(pts)))}</Height></RectangularGeometry><PlanarGeometry>${pl(pts)}</PlanarGeometry>${adj.map((a,i)=>`<AdjacentSpaceId spaceIdRef="${sid.get(a.r)}"${a.st?` surfaceType="${a.st}"`:''}/>`).join('')}${opXml}</Surface>`);
+    adj.forEach((a,i)=>{const o=adj[1-i];bnd.get(a.r).push(`<SpaceBoundary isSecondLevelBoundary="true" surfaceIdRef="${sId}"${o?` oppositeIdRef="${sid.get(o.r)}"`:''}><PlanarGeometry>${pl(pts)}</PlanarGeometry></SpaceBoundary>`);});
+    return sId;
+  };
+  // padlásmetszet: magasság a metszet tengelye mentén
+  const secOf=r=>{const l=levelSec(lvlOf(r));if(!l)return null;const P=secProfile(l.section,l);if(!P||P.err)return null;return {P,o:secOrigin(l),ax:P.axis};};
+  const hAtPt=(r,sec,p)=>sec?hAt(sec.P,(sec.ax==='x'?p.x:p.y)-sec.o):rH(r);
+  // ---- falak
+  const segs=[];
+  S.walls.forEach(w=>{const r=S.rooms.find(x=>x.id===w.roomId);if(!r)return;wallSegments(w,rel).forEach(sg=>segs.push({...sg,r}));});
+  // nyílászárók a falszakaszokhoz
+  const opsBySeg=new Map();
+  S.openings.forEach(o=>{
+    const ow=S.walls.find(x=>x.id===o.wallId);if(!ow)return;
+    opTs(o,ow).forEach(t=>{
+      const p=wPtAt(ow,t);
+      let seg=segs.find(sg=>sg.w===ow&&t>=sg.t0-1e-6&&t<=sg.t1+1e-6),tt=t;
+      if(!seg)for(const sg of segs){if(sg.w===ow||!sg.r2)continue;const W=wGeo(sg.w);const u=((p.x-sg.w.x1)*W.u.x+(p.y-sg.w.y1)*W.u.y)/W.L,d=Math.abs((p.x-sg.w.x1)*W.n.x+(p.y-sg.w.y1)*W.n.y);if(u>=sg.t0-1e-6&&u<=sg.t1+1e-6&&d<thOf(sg.w)+thOf(ow)+0.1){seg=sg;tt=u;break;}}
+      if(!seg)return;
+      if(!opsBySeg.has(seg))opsBySeg.set(seg,[]);
+      opsBySeg.get(seg).push({o,t:tt});
+    });
+  });
+  segs.forEach(sg=>{
+    const w=sg.w,r=sg.r,l=lv(lvlOf(r)),z0=levelZ(l),sec=secOf(r),L=wLen(w)||1;
+    const P=t=>({x:w.x1+(w.x2-w.x1)*t,y:w.y1+(w.y2-w.y1)*t});
+    const ops=(opsBySeg.get(sg)||[]).map(x=>({...x,a:x.t*L-x.o.ow/2,b:x.t*L+x.o.ow/2}));
+    // szárny nélküli átjáró: a falfelületből kivágjuk (teljes magasságúnál a fal kettéválik)
+    const pass=ops.filter(x=>x.o.type==='Átjáró'),real=ops.filter(x=>x.o.type!=='Átjáró');
+    let pieces=[[sg.t0*L,sg.t1*L]];
+    const hMid=u=>z0+hAtPt(r,sec,P(u/L));
+    pass.forEach(x=>{const top=x.o.oh;if(top>=hAtPt(r,sec,P(x.t))-0.02){pieces=pieces.flatMap(([a,b])=>{const res=[];if(x.a>a+0.02)res.push([a,Math.min(b,x.a)]);if(x.b<b-0.02)res.push([Math.max(a,x.b),b]);return x.b<=a||x.a>=b?[[a,b]]:res;});}});
+    pieces.forEach(([a,b])=>{
+      if(b-a<0.05)return;
+      // felső él: metszetnél töréspontokkal
+      const us=[a,b];
+      if(sec){sec.P.pts.forEach(q=>{const sAbs=q.u+sec.o;const d=(sec.ax==='x'?(w.x2-w.x1):(w.y2-w.y1))/L,s0=(sec.ax==='x'?w.x1:w.y1);if(Math.abs(d)>1e-6){const u=(sAbs-s0)/d;if(u>a+0.01&&u<b-0.01)us.push(u);}});}
+      us.sort((m,n)=>m-n);
+      // alsó él: a részleges átjárók kivágásával
+      const bottom=[{u:a,z:z0}];
+      pass.filter(x=>x.o.oh<hAtPt(r,sec,P(x.t))-0.02&&x.a<b&&x.b>a).sort((m,n)=>m.a-n.a).forEach(x=>{const xa=Math.max(a,x.a),xb=Math.min(b,x.b);bottom.push({u:xa,z:z0},{u:xa,z:z0+x.o.oh},{u:xb,z:z0+x.o.oh},{u:xb,z:z0});});
+      bottom.push({u:b,z:z0});
+      const pts=[...bottom.map(q=>T(l,P(q.u/L),q.z)),...us.slice().reverse().map(u=>T(l,P(u/L),hMid(u)))].filter((q,i,arr)=>i===0||Math.hypot(q.X-arr[i-1].X,q.Y-arr[i-1].Y,q.Z-arr[i-1].Z)>1e-4);
+      const G=wGeo(w),n0=T(l,{x:G.n.x,y:G.n.y},0),o0=T(l,{x:0,y:0},0),want={X:n0.X-o0.X,Y:n0.Y-o0.Y,Z:0};
+      const poly=orient(pts,want);
+      const opx=real.filter(x=>x.t*L>=a-1e-6&&x.t*L<=b+1e-6).map(x=>{
+        const h=x.o.oh+(x.o.sh||0),zb=z0+(x.o.type==='Ablak'?(+x.o.pm||0):0);
+        const q=[T(l,P(x.a/L),zb),T(l,P(x.b/L),zb),T(l,P(x.b/L),zb+h),T(l,P(x.a/L),zb+h)];
+        const door=x.o.type!=='Ablak',kind=door?(/erkély/i.test(x.o.alt||'')?'SlidingDoor':'NonSlidingDoor'):'OperableWindow';
+        return {pts:orient(q,want),kind,wt:wtype(x.o),name:`${x.o.type} ${x.o.alt||''} ${x.o.ow}×${h}`.trim()};
+      });
+      const conName=wallTypeName(w);
+      if(sg.r2)addSurf('InteriorWall',conName,poly,[{r:r.id},{r:sg.r2}],opx);
+      else addSurf(lvlOf(r)===S.levels[0].id&&/pince/i.test(l.name)?'UndergroundWall':'ExteriorWall',conName,poly,[{r:r.id}],opx);
+    });
+  });
+  // ---- padlók, födémek, tetők
+  const below=(r)=>{ // az alatta lévő szint helyisége (a középpont alatt)
+    const l=lv(lvlOf(r)),z=levelZ(l),c=roomCenter(r),W={X:c.x-l.bx,Y:c.y-l.by};
+    const lower=S.levels.filter(x=>levelZ(x)<z-0.5).sort((a,b)=>levelZ(b)-levelZ(a))[0];if(!lower)return null;
+    return S.rooms.find(x=>lvlOf(x)===lower.id&&ptInRoom(W.X+lower.bx,W.Y+lower.by,x))||null;
+  };
+  const hasAbove=new Set();
+  S.rooms.forEach(r=>{const b=below(r);if(b)hasAbove.add(b.id);});
+  const clip=(poly,ax,lo,hi)=>{
+    const k=p=>ax==='x'?p.x:p.y,cut=(pts,keep,inter)=>{const out=[];for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length],ia=keep(a),ib=keep(b);if(ia)out.push(a);if(ia!==ib)out.push(inter(a,b));}return out;};
+    const at=(a,b,v)=>{const t=(v-k(a))/(k(b)-k(a));return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};};
+    let p=cut(poly,q=>k(q)>=lo-1e-9,(a,b)=>at(a,b,lo));p=cut(p,q=>k(q)<=hi+1e-9,(a,b)=>at(a,b,hi));return p;
+  };
+  const DOWN={X:0,Y:0,Z:-1},UP={X:0,Y:0,Z:1};
+  S.rooms.forEach(r=>{
+    const l=lv(lvlOf(r)),z0=levelZ(l),poly=roomPoly(r);if(poly.length<3)return;
+    const b=below(r);
+    const fl=orient(poly.map(p=>T(l,p,z0)),DOWN);
+    if(b)addSurf('InteriorFloor',b.slab?`Födém – ${b.slab}`:'Közbenső födém',fl,[{r:r.id,st:'InteriorFloor'},{r:b.id,st:'Ceiling'}]);
+    else addSurf(z0<-0.5||levelZ(S.levels[0])===z0||!S.levels.some(x=>levelZ(x)<z0-0.5)?'SlabOnGrade':'ExposedFloor',r.floor?`Padló – ${r.floor}`:'Padló',fl,[{r:r.id}]);
+    if(hasAbove.has(r.id))return; // a fölötte lévő helyiség padlója már leírta
+    const sec=secOf(r);
+    if(sec){
+      const us=sec.P.pts.map(q=>q.u+sec.o);
+      for(let i=0;i<us.length-1;i++){
+        if(us[i+1]-us[i]<1e-3)continue;
+        const piece=clip(poly,sec.ax,us[i],us[i+1]);if(piece.length<3||polyAreaAbs(piece)<0.01)continue;
+        const flat=Math.abs(sec.P.pts[i].h-sec.P.pts[i+1].h)<1e-3;
+        const pts=orient(piece.map(p=>T(l,p,z0+hAt(sec.P,(sec.ax==='x'?p.x:p.y)-sec.o))),UP);
+        addSurf(flat?'Ceiling':'Roof',flat?(r.slab?`Padlásfödém – ${r.slab}`:'Padlásfödém'):'Tető',pts,[{r:r.id}]);
+      }
+    }else{
+      addSurf('Ceiling',r.slab?`Födém – ${r.slab}`:'Padlásfödém',orient(poly.map(p=>T(l,p,z0+rH(r))),UP),[{r:r.id}]);
+    }
+  });
+  // ---- terek, zónák
+  const zones=[];
+  S.rooms.forEach(r=>{
+    const l=lv(lvlOf(r)),z0=levelZ(l),sc=roomSecCalc(r),a=sc?sc.area19:roomArea(r),vol=sc?sc.vol:roomArea(r)*rH(r);
+    const nm=`${roomNo(r)}. ${r.name||'Helyiség'}`,zid='zn'+sid.get(r.id).slice(2),t=/fürdő|zuhany/i.test(r.name||'')?24:/kamra|kazán|garázs|tároló/i.test(r.name||'')?16:20;
+    zones.push(`<Zone id="${zid}"><Name>${xe(nm)}</Name><DesignHeatT unit="C">${t.toFixed(1)}</DesignHeatT><DesignCoolT unit="C">26.0</DesignCoolT></Zone>`);
+    spaces.push(`<Space id="${sid.get(r.id)}" buildingStoreyIdRef="st_${l.id}" zoneIdRef="${zid}" conditionType="HeatedAndCooled"><Name>${xe(nm)}</Name><Description>${xe(nm)}</Description><Area>${a.toFixed(2)}</Area><Volume>${vol.toFixed(2)}</Volume><PlanarGeometry>${pl(orient(roomPoly(r).map(p=>T(l,p,z0)),UP))}</PlanarGeometry>${bnd.get(r.id).join('')}</Space>`);
+  });
+  const storeys=S.levels.map(l=>`<BuildingStorey id="st_${l.id}"><Name>${xe(l.name)}</Name><Level>${f(levelZ(l))}</Level></BuildingStorey>`).join('');
+  const totA=S.rooms.reduce((s,r)=>{const sc=roomSecCalc(r);return s+(sc?sc.area19:roomArea(r));},0);
+  const consXml=[...cons.entries()].map(([n,i])=>`<Construction id="${i}"><Name>${xe(n)}</Name><Description>${xe(n)}</Description></Construction>`).join('');
+  const wtXml=[...wts.entries()].map(([n,v])=>`<WindowType id="${v.id}"><Name>${xe(n)}</Name><Description>${xe(n)}</Description></WindowType>`).join('');
+  const now=new Date().toISOString().slice(0,19);
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<gbXML xmlns="http://www.gbxml.org/schema" version="7.03" useSIUnitsForResults="true" temperatureUnit="C" lengthUnit="Meters" areaUnit="SquareMeters" volumeUnit="CubicMeters" SurfaceReferenceLocation="InteriorSurface">
+<Campus id="ca0001"><Name>${xe(S.b.addr||'Felmérés')}</Name><Location><Name>${xe(S.b.addr||'')}</Name><Longitude>19.083333</Longitude><Latitude>47.500000</Latitude></Location>
+${surfaces.join('\n')}
+<Building id="bd0001" buildingType="SingleFamily"><Name>${xe(S.b.addr||'Épület')}</Name><Description>${xe([S.b.cust&&'Megrendelő: '+S.b.cust,S.b.hrsz&&'HRSZ: '+S.b.hrsz,S.b.date&&'Felmérés: '+S.b.date].filter(Boolean).join(' · '))}</Description><Area>${totA.toFixed(2)}</Area>
+${storeys}
+${spaces.join('\n')}
+</Building></Campus>
+${consXml}
+${wtXml}
+${zones.join('\n')}
+<DocumentHistory><ProgramInfo id="prog-1"><CompanyName>-</CompanyName><ProductName>Épületfelmérő</ProductName><Version>1</Version></ProgramInfo><CreatedBy programId="prog-1" date="${now}"/></DocumentHistory>
+</gbXML>`;
+  deliver(new Blob([xml],{type:'application/xml'}),`${fileBase()}_${stamp()}.xml`);
+  return xml;
+}
+
 const DEF_NAME=/^Helyiség \d+$/;
 function expName(r){return !r.name||DEF_NAME.test(r.name)?'Helyiség':r.name;}
 function exportXls(){
@@ -2708,6 +2984,7 @@ function printBoxes(){
     ${box('Födém:',valList('slab'),'slabNote')}
     ${box('Padló:',valList('floor'))}
     ${box('Nyílászárók:',ops,'winNote')}
+    ${(S.chims||[]).length?box('Kémény / kürtő:',[...groupBy(S.chims,c=>c.type).entries()].map(([t,cs])=>{const ns=[...new Set(cs.map(c=>{const r=chimRoom(c);return r?roomNo(r):null;}).filter(x=>x!=null))];return esc(t)+(cs.length>1?` ${cs.length} db`:'')+(ns.length?` <span style="color:#444">(${ns.join(', ')})</span>`:'');})):''}
     ${box('Fűtés:',valList('heat'),'heatNote')}
     ${box('HMV:',valList('dhw'),'dhwNote')}
     ${box('Világítás:',valList('light'),'lightNote')}
@@ -2794,9 +3071,10 @@ const acts={
   projects(){openProjModal();},
   saveJson(){deliver(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),`${fileBase()}_${stamp()}.json`);},
   loadJson(){$('#fileIn').click();},
-  exportXls,printA4,printPlan,undo,redo,
+  exportXls,exportGbxml,printA4,printPlan,undo,redo,
   delSel(){
-    if(selOp){snapshot();S.openings=S.openings.filter(x=>x.id!==selOp);selOp=null;}
+    if(selChim){snapshot();S.chims=S.chims.filter(x=>x.id!==selChim);selChim=null;}
+    else if(selOp){snapshot();S.openings=S.openings.filter(x=>x.id!==selOp);selOp=null;}
     else if(selWalls.size){snapshot();S.walls=S.walls.filter(w=>!selWalls.has(w.id));S.openings=S.openings.filter(o=>!selWalls.has(o.wallId));selWalls.clear();}
     save();render();panel();
   },
@@ -2821,6 +3099,7 @@ const acts={
   defTh30(){S.b.defTh=0.30;save();updateTopInfo();},
   defTh38(){S.b.defTh=0.38;save();updateTopInfo();},
   toggleOverall(){showOverall=!showOverall;render();},
+  toggleNotes(){S.b.hideNotes=!S.b.hideNotes;save();render();const m=$('#mnNotes');if(m)m.textContent='Kézi jegyzetek: '+(S.b.hideNotes?'rejtve':'látszanak');},
   selExt(){selWalls=new Set(exteriorWalls().map(w=>w.id));selRoom=null;selOp=null;tab='props';syncTabs();render();panel();},
   selInt(){const ext=new Set(exteriorWalls());selWalls=new Set(S.walls.filter(w=>!ext.has(w)).map(w=>w.id));selRoom=null;selOp=null;tab='props';syncTabs();render();panel();},
   clearPins(){if(!(S.pins||[]).length){alert('Nincs kézi homlokzat-igazítás.');return;}if(confirm(`${S.pins.length} homlokzat-igazítás törlése?`)){snapshot();S.pins=[];save();render();}},
@@ -2971,6 +3250,10 @@ function stopMeasure(){measureMode=false;$('#measOv').classList.remove('on','bus
 $('#btnMeas').onclick=()=>measureMode?stopMeasure():startMeasure();
 $('#measOv').addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;e.preventDefault();distoTrigger();});
 $('#moExit').onclick=e=>{e.stopPropagation();stopMeasure();};
+$$('#inkBanner [data-ink]').forEach(b=>b.onclick=()=>{inkColor=b.dataset.ink;inkErase=false;updInkBanner();});
+$('#inkErase').onclick=()=>{inkErase=!inkErase;updInkBanner();};
+$('#inkUndo').onclick=()=>{const i=S.notes.map(n=>n.level).lastIndexOf(S.curLevel);if(i>=0){snapshot();S.notes.splice(i,1);save();render();}};
+$('#inkDone').onclick=()=>setTool('select');
 $$('#moWall [data-mdir]').forEach(b=>b.addEventListener('pointerdown',e=>{
   e.stopPropagation();e.preventDefault();
   if(!draft.length){$('#moHint').textContent='Előbb koppints a kezdősarokra a rajzon (lépj ki a mérésből)';return;}
