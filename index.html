@@ -3049,13 +3049,32 @@ function exportGbxml(opts){
   // padlásmetszet: magasság a metszet tengelye mentén
   const secOf=r=>{const l=levelSec(lvlOf(r));if(!l)return null;const P=secProfile(l.section,l);if(!P||P.err)return null;return {P,o:secOrigin(l),ax:P.axis};};
   const hAtPt=(r,sec,p)=>sec?hAt(sec.P,(sec.ax==='x'?p.x:p.y)-sec.o):rH(r);
+  // tetőablak a ferde tetőben: alsó éle a mellvéd magasságán (de legalább a térdfal tetején), magassága a lejtő mentén mérve
+  function roofWinPoly(o,w,t,r){
+    const sec=secOf(r);if(!sec)return null;
+    const G=wGeo(w),p=wPtAt(w,t),inn={x:-G.n.x,y:-G.n.y},S0=d=>({x:p.x+inn.x*d,y:p.y+inn.y*d}),h=d=>hAtPt(r,sec,S0(d));
+    // csak eresz felőli falon (a fal mentén nem változik a magasság)
+    const hw=o.ow/2;if(Math.abs(hAtPt(r,sec,{x:p.x+G.u.x*hw,y:p.y+G.u.y*hw})-hAtPt(r,sec,{x:p.x-G.u.x*hw,y:p.y-G.u.y*hw}))>0.05)return null;
+    const zb=Math.max(+o.pm||0,h(0.02)),st=0.01;let d=0.02,g=0;
+    while(h(d)<zb-1e-4&&d<15){if(h(d+st)<=h(d)-1e-6&&++g>3)return null;d+=st;}
+    if(d>=15)return null;
+    const d0=d;let len=0;
+    while(len<o.oh&&d<15){const dh=h(d+st)-h(d);if(dh<=1e-6)return null;len+=Math.hypot(st,dh);d+=st;}
+    const d1=d,a=S0(d0),b=S0(d1),U=G.u;
+    return [{x:a.x-U.x*hw,y:a.y-U.y*hw},{x:a.x+U.x*hw,y:a.y+U.y*hw},{x:b.x+U.x*hw,y:b.y+U.y*hw},{x:b.x-U.x*hw,y:b.y-U.y*hw}];
+  }
   // ---- falak
   const segs=[];
   S.walls.forEach(w=>{const r=S.rooms.find(x=>x.id===w.roomId);if(!r)return;wallSegments(w,rel).forEach(sg=>segs.push({...sg,r}));});
   // nyílászárók a falszakaszokhoz
-  const opsBySeg=new Map();
+  const opsBySeg=new Map(),roofWins=[];
   S.openings.forEach(o=>{
     const ow=S.walls.find(x=>x.id===o.wallId);if(!ow)return;
+    const orr=S.rooms.find(x=>x.id===ow.roomId);
+    if(o.type==='Ablak'&&/tetőablak/i.test(o.alt||'')&&orr){ // tetőablak: a tető síkjába kerül, nem a térdfalra
+      const ok=opTs(o,ow).map(t=>roofWinPoly(o,ow,t,orr)).filter(Boolean);
+      if(ok.length){ok.forEach(q=>roofWins.push({o,r:orr,q,used:false}));return;}
+    }
     opTs(o,ow).forEach(t=>{
       const p=wPtAt(ow,t);
       let seg=segs.find(sg=>sg.w===ow&&t>=sg.t0-1e-6&&t<=sg.t1+1e-6),tt=t;
@@ -3158,7 +3177,10 @@ function exportGbxml(opts){
           if(us[i+1]-us[i]<1e-3)continue;
           const piece=clip(pc,sec.ax,us[i],us[i+1]);if(piece.length<3||polyAreaAbs(piece)<0.01)continue;
           const flat=Math.abs(sec.P.pts[i].h-sec.P.pts[i+1].h)<1e-3;
-          addSurf(flat?'Ceiling':'Roof',flat?(r.slab?`Padlásfödém – ${r.slab}`:'Padlásfödém'):'Tető',orient(piece.map(p=>T(l,p,z0+hAt(sec.P,(sec.ax==='x'?p.x:p.y)-sec.o))),UP),[{r:r.id}]);
+          const Z=p=>T(l,p,z0+hAt(sec.P,(sec.ax==='x'?p.x:p.y)-sec.o));
+          const rw=flat?[]:roofWins.filter(x=>!x.used&&x.r===r&&(()=>{const c=x.q.reduce((t,q)=>({x:t.x+q.x/4,y:t.y+q.y/4}),{x:0,y:0});return ptInPoly(piece,c.x,c.y);})());
+          const opx=rw.map(x=>{x.used=true;const pq=orient(x.q.map(Z),UP);return {pts:pq,kind:'FixedWindow',wt:wtype(x.o),w:x.o.ow,h:x.o.oh,sill:0,off:0,name:`${x.o.type} ${x.o.alt||''} ${x.o.ow}×${x.o.oh}`.trim()};});
+          addSurf(flat?'Ceiling':'Roof',flat?(r.slab?`Padlásfödém – ${r.slab}`:'Padlásfödém'):'Tető',orient(piece.map(Z),UP),[{r:r.id}],opx);
         }
       }else addSurf('Ceiling',r.slab?`Födém – ${r.slab}`:'Padlásfödém',orient(pc.map(p=>T(l,p,z0+rH(r))),UP),[{r:r.id}]);
     });
