@@ -60,6 +60,9 @@ button{cursor:pointer}
 #numBanner.on{display:flex}
 #inkBanner{display:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;background:#1e3a8af0;border:1px solid #60a5fa;border-radius:8px;padding:6px 10px;gap:8px;align-items:center;font-size:13px;color:#fff}
 #inkBanner.on{display:flex}
+#moveBanner{display:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;background:#14532df0;border:1px solid #4ade80;border-radius:8px;padding:6px 10px;gap:10px;align-items:center;font-size:13px;color:#fff}
+#moveBanner.on{display:flex}
+#moveBanner button{background:#16a34a;color:#fff;border:1px solid #86efac;border-radius:6px;padding:5px 14px;font-weight:600}
 #inkBanner button{background:#374151;color:#fff;border:1px solid #6b7280;border-radius:6px;padding:4px 10px;min-width:34px}
 #inkBanner button.sel{outline:3px solid #fff}
 #numBanner button{background:#374151;color:#fff;border:1px solid #6b7280;border-radius:6px;padding:4px 10px}
@@ -296,6 +299,7 @@ textarea{resize:vertical}
         <button id="paintAll">Összes helyiség</button>
         <button id="paintStop">Kész</button>
       </div>
+      <div id="moveBanner"><span id="moveTxt">✥ Mozgatás</span><button id="moveDone">✓ Kész</button></div>
       <div id="inkBanner"><span>✎ Jegyzet</span><button data-ink="#ef4444" style="background:#ef4444">&nbsp;</button><button data-ink="#3b82f6" style="background:#3b82f6">&nbsp;</button><button data-ink="#22c55e" style="background:#22c55e">&nbsp;</button><button data-ink="#111827" style="background:#e5e7eb;color:#111">&nbsp;</button><button id="inkErase">Radír</button><button id="inkUndo">↶</button><button id="inkDone">Kész</button></div>
       <div id="numBanner"><span id="numTxt"></span><button id="numUndo">↶</button><button id="numStop">Kész</button></div>
       <div id="segBox" style="display:none">
@@ -1108,6 +1112,59 @@ function chamfer(wA,wB,rA,rB){
   S.walls.splice(S.walls.indexOf(wA)+1,0,nw);
 }
 
+// sokszög a falhosszakból (s) és az 1. sarokból mért átlókból (d); sg(k): a k. sarok (0-alapú) a bal (+1) vagy jobb (−1) oldalra kerül
+function polySolve(s,d,sg){
+  const n=s.length,P=[{x:0,y:0},{x:s[0],y:0}],dist1=k=>k===n-1?s[n-1]:d[k-2];
+  for(let k=2;k<n;k++){
+    const r0=dist1(k),r1=s[k-1],a=P[0],b=P[k-1],D=Math.hypot(b.x-a.x,b.y-a.y);
+    if(D>r0+r1+1e-6||D<Math.abs(r0-r1)-1e-6)return {err:k};
+    const x=(r0*r0-r1*r1+D*D)/(2*D),h=Math.sqrt(Math.max(0,r0*r0-x*x)),ux=(b.x-a.x)/D,uy=(b.y-a.y)/D,g=sg(k);
+    P.push({x:a.x+ux*x-uy*h*g,y:a.y+uy*x+ux*h*g});
+  }
+  return {P};
+}
+/* ===== Meglévő helyiség alakjának javítása falhosszakból + átlókból ===== */
+function openRoomGeoModal(r){
+  const ws=roomWalls(r),n=ws.length;
+  if(n<3||n>12||ws.some(w=>w.sag)||ws.some((w,i)=>{const v=ws[(i+1)%n];return Math.hypot(w.x2-v.x1,w.y2-v.y1)>0.02;})){alert('Ez csak zárt, egyenes falú helyiségnél működik.');return;}
+  const C=ws.map(w=>({x:w.x1,y:w.y1})),m=$('#modal');m.classList.add('wide');
+  const dd=k=>Math.hypot(C[k].x-C[0].x,C[k].y-C[0].y);
+  m.innerHTML=`<h3><span>${roomNo(r)}. ${esc(r.name)} – alak javítása méretekből</span><button class="btn" id="mClose">✕</button></h3>
+    <p class="muted">A mezőkben a rajz jelenlegi méretei vannak. Írd át, amit lemértél – <b>${n===4?'négyszögnél a falak mellé elég egy átló (1→3)':'a falak mellé az 1. sarokból mért átlók kellenek'}</b>, és a helyiség pontosan arra az alakra áll be. Az 1. sarok és az 1→2 fal iránya marad. Az 1. sarok a rajzon <b style="color:#f59e0b">narancs ponttal</b> látszik.</p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px"><b>Falak</b>${ws.map((w,i)=>`<div class="row"><label>${i+1}→${i===n-1?1:i+2}</label><input id="rgS${i}" data-disto type="text" inputmode="none" autocomplete="off" value="${hu(wLen(w),3,true)}"></div>`).join('')}</div>
+      <div style="flex:1;min-width:220px"><b>Átlók az 1. sarokból</b>${[...Array(Math.max(0,n-3))].map((_,i)=>`<div class="row"><label>1→${i+3}</label><input id="rgD${i}" data-disto type="text" inputmode="none" autocomplete="off" value="${hu(dd(i+2),3,true)}"></div>`).join('')||'<p class="muted">háromszögnél nem kell</p>'}</div>
+    </div>
+    <div id="rgPrev" class="muted"></div>
+    <p class="muted">A szomszéd helyiségek falai nem mozdulnak – ha eltérés marad, azokat a „Mozgatás” tapadásával vagy saját méreteikkel igazítsd.</p>
+    <div class="row"><button class="btn pri" id="mOk">Alkalmaz</button><button class="btn" id="mCancel">Mégse</button></div>`;
+  $('#modalWrap').classList.add('open');
+  const close=()=>{$('#modalWrap').classList.remove('open');m.classList.remove('wide');geoMark=null;render();};
+  geoMark=C;render();
+  $('#mClose').onclick=close;$('#mCancel').onclick=close;
+  // jelenlegi alak a fal1 helyi rendszerében → melyik oldalra essenek a sarkok
+  const G=wGeo(ws[0]),loc=C.map(p=>({x:(p.x-C[0].x)*G.u.x+(p.y-C[0].y)*G.u.y,y:-(p.x-C[0].x)*G.u.y+(p.y-C[0].y)*G.u.x}));
+  const sg=k=>{const b=loc[k-1],c=loc[k];return (b.x*c.y-b.y*c.x)>=0?1:-1;};
+  const solve=()=>{
+    const sv=ws.map((_,i)=>pf($('#rgS'+i).value)),dv=[...Array(Math.max(0,n-3))].map((_,i)=>pf($('#rgD'+i).value));
+    if(sv.some(v=>!(v>0))||dv.some(v=>!(v>0))){$('#rgPrev').textContent='Minden mező kell.';return null;}
+    const R=polySolve(sv,dv,sg);
+    if(R.err){$('#rgPrev').innerHTML=`<span style="color:#f87171">A ${R.err+1}. sarok nem szerkeszthető ezekkel a méretekkel – ellenőrizd az 1→${R.err+1} és ${R.err}→${R.err+1} értéket.</span>`;return null;}
+    const A=Math.abs(R.P.reduce((t,p,i)=>{const q=R.P[(i+1)%n];return t+p.x*q.y-q.x*p.y;},0)/2);
+    $('#rgPrev').innerHTML=`Új terület: <b>${hu(A,2,true)} m²</b> (most ${hu(roomArea(r),2,true)} m²)`;
+    return R.P;
+  };
+  m.querySelectorAll('input').forEach(i=>i.addEventListener('change',solve));solve();
+  $('#mOk').onclick=()=>{
+    const P=solve();if(!P)return;snapshot();
+    const W=P.map(p=>({x:r3(C[0].x+G.u.x*p.x-G.u.y*p.y),y:r3(C[0].y+G.u.y*p.x+G.u.x*p.y)}));
+    ws.forEach((w,i)=>{const L0=wLen(w),a=W[i],b=W[(i+1)%n],L1=Math.hypot(b.x-a.x,b.y-a.y)||1;
+      S.openings.filter(o=>o.wallId===w.id).forEach(o=>{o.pos=Math.min(0.98,Math.max(0.02,o.pos*L0/L1));});
+      w.x1=a.x;w.y1=a.y;w.x2=b.x;w.y2=b.y;});
+    save();close();panel();
+  };
+}
+let geoMark=null;
 /* ===== Szabálytalan helyiség mérésből (sarokpontok háromszögeléssel) ===== */
 function openPolyMeasureModal(){
   const w=selWalls.size===1?S.walls.find(x=>selWalls.has(x.id)):null;
@@ -1137,16 +1194,9 @@ function openPolyMeasureModal(){
     const s=[...Array(n)].map((_,i)=>pf($('#pmS'+i).value)),d=[...Array(Math.max(0,n-3))].map((_,i)=>pf($('#pmD'+i).value));
     if(s.some(v=>!(v>0))||d.some(v=>!(v>0))){$('#pmPrev').innerHTML='<span class="muted">Add meg az összes falat és átlót.</span>';return null;}
     const flip=new Set(String($('#pmFlip').value||'').split(/[ ,;]+/).map(x=>parseInt(x)).filter(x=>x>0));
-    // 1. sarok az origóban, 2. az x tengelyen; a többi sarok: két kör metszéspontja (1-től átló, előzőtől fal)
-    const P=[{x:0,y:0},{x:s[0],y:0}];
-    const dist1=k=>k===n-1?s[n-1]:d[k-2]; // 1→(k+1) távolság, k: 0-alapú index
-    for(let k=2;k<n;k++){
-      const r0=dist1(k),r1=s[k-1],a=P[0],b=P[k-1],D=Math.hypot(b.x-a.x,b.y-a.y);
-      if(D>r0+r1+1e-6||D<Math.abs(r0-r1)-1e-6){$('#pmPrev').innerHTML=`<span style="color:#f87171">A ${k+1}. sarok nem szerkeszthető – ellenőrizd az 1→${k+1} és ${k}→${k+1} méretet.</span>`;return null;}
-      const x=(r0*r0-r1*r1+D*D)/(2*D),h=Math.sqrt(Math.max(0,r0*r0-x*x)),ux=(b.x-a.x)/D,uy=(b.y-a.y)/D;
-      const sg=flip.has(k+1)?-1:1; // alapból a sokszög „bal” oldalra fordul (domború)
-      P.push({x:a.x+ux*x-uy*h*sg,y:a.y+uy*x+ux*h*sg});
-    }
+    const R=polySolve(s,d,k=>flip.has(k+1)?-1:1);
+    if(R.err){const k=R.err;$('#pmPrev').innerHTML=`<span style="color:#f87171">A ${k+1}. sarok nem szerkeszthető – ellenőrizd az 1→${k+1} és ${k}→${k+1} méretet.</span>`;return null;}
+    const P=R.P;
     const close=Math.hypot(P[n-1].x-P[0].x,P[n-1].y-P[0].y);
     // ellenőrzés: az utolsó fal (n→1) a mért hossz-e
     const err=Math.abs(close-s[n-1]);
@@ -1175,7 +1225,8 @@ function openPolyMeasureModal(){
 
 /* ===== Helyiség mozgatása / forgatása (sarokra tapadással) ===== */
 let roomMove=null;
-function roomMoveStart(r){roomMove={r};showHint('Húzd a helyiséget – a falsíkjai a szomszéd falakhoz igazodnak (tapadás). Ha kész, koppints a „✓ Kész” gombra.');panel();}
+function roomMoveStart(r){roomMove={r};const b=$('#moveBanner');b.classList.add('on');$('#moveTxt').textContent='✥ '+roomNo(r)+'. '+r.name+' mozgatása – húzd; a falsíkok tapadnak';showHint('Húzd a helyiséget. Kilépés: „✓ Kész”, vagy koppints a helyiségen kívülre.');panel();}
+function roomMoveEnd(){if(!roomMove)return;roomMove=null;const b=$('#moveBanner');if(b)b.classList.remove('on');save();render();}
 function moveRoomBy(r,dx,dy){const ch=(S.chims||[]).filter(c=>chimRoom(c)===r);roomWalls(r).forEach(w=>{w.x1=r3(w.x1+dx);w.x2=r3(w.x2+dx);w.y1=r3(w.y1+dy);w.y2=r3(w.y2+dy);});ch.forEach(c=>{c.x=r3(c.x+dx);c.y=r3(c.y+dy);});}
 function rotateRoom(r,deg){
   const c=roomCenter(r),a=deg*Math.PI/180,ca=Math.cos(a),sa=Math.sin(a);
@@ -2004,6 +2055,7 @@ function render(targetSvg=svg,isPrint=false){
 
   drawChims(targetSvg,isPrint,px);
   drawNotes(targetSvg,isPrint,px);
+  if(!isPrint&&geoMark)geoMark.forEach((c,i)=>{el('circle',{cx:c.x,cy:c.y,r:px*(i?7:9),fill:i?'#334155':'#f59e0b',stroke:'#fff','stroke-width':px*1.5},targetSvg);const t=el('text',{x:c.x,y:c.y+px*4,'text-anchor':'middle','font-size':px*11,'font-weight':700,fill:'#fff'},targetSvg);t.textContent=i+1;});
   // Openings
   const gO=el('g',{},targetSvg);
   S.openings.forEach(o=>{
@@ -2268,6 +2320,7 @@ svg.addEventListener('pointerdown',e=>{
     return;
   }
 
+  if(roomMove&&(tool!=='select'||!ptInRoom(raw.x,raw.y,roomMove.r)))roomMoveEnd(); // a helyiségen kívüli koppintás kilép
   if(roomMove&&tool==='select'){
     const r=roomMove.r;snapshot();drag={kind:'roomMove',r,last:raw,acc:{x:0,y:0}};return;
   }
@@ -2692,6 +2745,7 @@ $('#paintAll').onclick=()=>{
 /* Right Panel */
 function panel(){
   const p=$('#panel');
+  if(roomMove&&selRoom!==roomMove.r.id)roomMoveEnd();
   if(tab==='rooms'){
     const tot=S.rooms.reduce((a,r)=>a+roomArea(r),0);
     const relT=detectRel();
@@ -2787,6 +2841,7 @@ function panel(){
       ${Object.keys(CATS).filter(k=>k!=='func').map(k=>`<div class="row"><label>${CATS[k].label}</label><input data-rc="${k}" list="dl_${k}" placeholder="—" value="${esc(getV(r,k))}"></div>
         <datalist id="dl_${k}">${catOpts(k).map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`).join('')}
       <div class="row"><button class="btn" id="rMove">${roomMove&&roomMove.r===r?'✓ Kész (mozgatás)':'Mozgatás'}</button><label style="width:auto">Forgatás (°)</label><input id="rRot" type="text" inputmode="decimal" placeholder="pl. 15" style="width:70px"><button class="btn" id="rRotB">↻</button></div>
+      <div class="row"><button class="btn" id="rGeo" title="Falhosszak + átló(k) alapján pontosítja a helyiség alakját">Alak javítása méretekből (átló)…</button></div>
       <div class="row"><button class="btn dan" id="rDel">Helyiség törlése</button></div></div>`;
   }
   if(!html)html='<p class="muted">Koppints egy helyiségre, falra vagy nyílászáróra, vagy válassz fent rajzeszközt (Téglalap / Fal).</p>';
@@ -2849,7 +2904,8 @@ function panel(){
       save();render();
     };
     p.querySelectorAll('[data-rc]').forEach(inp=>inp.onchange=()=>{snapshot();setV(r,inp.dataset.rc,inp.value.trim());save();render();});
-    $('#rMove').onclick=()=>{if(roomMove&&roomMove.r===r){roomMove=null;save();render();panel();}else roomMoveStart(r);};
+    $('#rMove').onclick=()=>{if(roomMove&&roomMove.r===r){roomMoveEnd();panel();}else{roomMoveEnd();roomMoveStart(r);}};
+    $('#rGeo').onclick=()=>openRoomGeoModal(r);
     $('#rRotB').onclick=()=>{const a=pf($('#rRot').value);if(!isFinite(a)||!a)return;snapshot();rotateRoom(r,a);save();render();};
     $('#rDel').onclick=()=>{
       snapshot();
@@ -3503,6 +3559,7 @@ $$('[data-tool]').forEach(b=>b.onclick=()=>{
 });
 function syncTabs(){$$('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));}
 $$('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;syncTabs();panel();});
+$('#moveDone').onclick=()=>{roomMoveEnd();panel();};
 $('#btnUndo').onclick=undo;$('#btnRedo').onclick=redo;
 $('#chkGrid').onchange=$('#gridStep').onchange=$('#chkDim').onchange=()=>render();
 
